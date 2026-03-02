@@ -1,0 +1,2 @@
+# Private keys and certificates are generated per-deployment — never commit them
+certs/
