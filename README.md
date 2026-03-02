@@ -33,15 +33,49 @@ Stockholm runs 4 VMs (VM1, VM2, VM3, VM6). London (VM4, VM5) runs on a teammate'
  └──────┘
 ```
 
+## Why Vagrant?
+
+Setting up multiple VMs manually in VirtualBox is tedious and error-prone — you'd need to create each VM by hand, configure every network adapter, set static IPs, and repeat the whole process if something breaks. Vagrant wraps VirtualBox and lets you define the entire topology in a single `Vagrantfile`:
+
+- **Reproducible:** `vagrant up` creates identical VMs every time — no clicking through GUIs.
+- **Version-controlled:** The Vagrantfile and provision scripts live in git, so the whole infrastructure is reviewable and diffable.
+- **Fast teardown/rebuild:** `vagrant destroy -f && vagrant up` gives you a clean slate in minutes.
+- **Automated provisioning:** Shell scripts run automatically on first boot, installing packages, configuring routes, and setting up services.
+- **Snapshots:** Save/restore VM state without manually navigating VirtualBox menus.
+
+In short, Vagrant turns a 30-minute manual setup into a single command.
+
 ## Prerequisites
 
-- macOS (or Linux/Windows with VirtualBox support)
 - [VirtualBox](https://www.virtualbox.org/) 7.x
 - [Vagrant](https://www.vagrantup.com/) 2.4+
 - ~16 GB RAM and ~50 GB disk available
 
+### macOS
+
 ```bash
 brew install --cask virtualbox vagrant
+```
+
+### Windows
+
+1. Install [VirtualBox](https://www.virtualbox.org/wiki/Downloads) (Windows hosts) and [Vagrant](https://developer.hashicorp.com/vagrant/install#windows) (AMD64 .msi).
+2. Reboot after both installers finish.
+3. Open **PowerShell** (or Git Bash) in the project directory.
+
+> **Note:** On Windows, Hyper-V must be disabled for VirtualBox to work. In an elevated PowerShell:
+>
+> ```powershell
+> bcdedit /set hypervisorlaunchtype off
+> ```
+>
+> Then reboot. To re-enable later: `bcdedit /set hypervisorlaunchtype auto`.
+
+### Linux
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install -y virtualbox vagrant
 ```
 
 ## Quick Start
@@ -49,31 +83,35 @@ brew install --cask virtualbox vagrant
 ```bash
 # 1. Create and provision all VMs (~5 min)
 vagrant up
-
-# 2. Apply firewall rules (from project directory)
-bash configure-ufw.sh
+      # macOS/Linux
+# On Windows (Git Bash): bash configure-ufw.sh
 
 # 3. Verify firewall policies
 bash test-firewall.sh
 ```
 
+> **Windows users:** Run commands from Git Bash or WSL. PowerShell works for `vagrant` commands but the bash scripts need a Unix shell.. Verify firewall policies
+> bash test-firewall.sh
+
+````
+
 ## Scripts
 
-| Script | Run From | Purpose |
-|---|---|---|
-| `vagrant up` | Host (project dir) | Create and provision all VMs |
-| `configure-ufw.sh` | Host (project dir) | Apply UFW firewall rules to all VMs |
+| Script             | Run From           | Purpose                                          |
+| ------------------ | ------------------ | ------------------------------------------------ |
+| `vagrant up`       | Host (project dir) | Create and provision all VMs                     |
+| `configure-ufw.sh` | Host (project dir) | Apply UFW firewall rules to all VMs              |
 | `test-firewall.sh` | Host (project dir) | Verify firewall policies with connectivity tests |
-| `reset-ufw.sh` | Host (project dir) | Disable all UFW rules on all VMs |
+| `reset-ufw.sh`     | Host (project dir) | Disable all UFW rules on all VMs                 |
 
 ## VMs
 
-| VM | Hostname | VLAN | IP | Key Services |
-|---|---|---|---|---|
-| VM1 | vm1-gw | 10, 20, 30 | 10.0.1.1, .129, .241 | StrongSwan IPsec, Suricata IDS, Fail2ban, NAT |
-| VM2 | vm2-srv | 10 | 10.0.1.2 | Nginx, BIND9, Docker, Syncthing |
-| VM3 | vm3-ca | 10 | 10.0.1.3 | FreeRADIUS, Easy-RSA (air-gapped) |
-| VM6 | vm6-dmz | 30 | 10.0.1.242 | Docker, Nginx, Certbot |
+| VM  | Hostname | VLAN       | IP                   | Key Services                                  |
+| --- | -------- | ---------- | -------------------- | --------------------------------------------- |
+| VM1 | vm1-gw   | 10, 20, 30 | 10.0.1.1, .129, .241 | StrongSwan IPsec, Suricata IDS, Fail2ban, NAT |
+| VM2 | vm2-srv  | 10         | 10.0.1.2             | Nginx, BIND9, Docker, Syncthing               |
+| VM3 | vm3-ca   | 10         | 10.0.1.3             | FreeRADIUS, Easy-RSA (air-gapped)             |
+| VM6 | vm6-dmz  | 30         | 10.0.1.242           | Docker, Nginx, Certbot                        |
 
 ## SSH Access
 
@@ -82,22 +120,23 @@ vagrant ssh vm1-gw
 vagrant ssh vm2-srv
 vagrant ssh vm3-ca
 vagrant ssh vm6-dmz
-```
+````
 
 ## Interface Mapping (VirtualBox)
 
 All VMs have a Vagrant NAT adapter (`enp0s3`) for management. VLAN interfaces:
 
-| VM | enp0s8 | enp0s9 | enp0s10 |
-|---|---|---|---|
-| VM1 | VLAN 10 (10.0.1.1) | VLAN 20 (10.0.1.129) | VLAN 30 (10.0.1.241) |
-| VM2 | VLAN 10 (10.0.1.2) | — | — |
-| VM3 | VLAN 10 (10.0.1.3) | — | — |
-| VM6 | VLAN 30 (10.0.1.242) | — | — |
+| VM  | enp0s8               | enp0s9               | enp0s10              |
+| --- | -------------------- | -------------------- | -------------------- |
+| VM1 | VLAN 10 (10.0.1.1)   | VLAN 20 (10.0.1.129) | VLAN 30 (10.0.1.241) |
+| VM2 | VLAN 10 (10.0.1.2)   | —                    | —                    |
+| VM3 | VLAN 10 (10.0.1.3)   | —                    | —                    |
+| VM6 | VLAN 30 (10.0.1.242) | —                    | —                    |
 
 ## Firewall Policy Summary
 
 **VM1 (Gateway):**
+
 - Default deny incoming/routed, allow outgoing
 - NAT masquerade for 10.0.1.0/24 outbound on enp0s3
 - DMZ blocked from Server and Client VLANs (deny before allow)
@@ -110,16 +149,6 @@ All VMs have a Vagrant NAT adapter (`enp0s3`) for management. VLAN interfaces:
 **VM3 (CA):** deny incoming except SSH, RADIUS (1812-1813/udp). Air-gapped (no default route).
 
 **VM6 (DMZ):** deny incoming except SSH, HTTP/S
-
-## IPsec to London (Demo Day)
-
-For the S2S tunnel between laptops on demo day, add a bridged adapter to VM1 in the Vagrantfile:
-
-```ruby
-gw.vm.network "public_network", bridge: "en0: Wi-Fi"
-```
-
-Then `vagrant reload vm1-gw` to apply. Update StrongSwan config with the new WAN IP.
 
 ## Vagrant Tips
 
