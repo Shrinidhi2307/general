@@ -49,7 +49,8 @@ In short, Vagrant turns a 30-minute manual setup into a single command.
 
 - [VirtualBox](https://www.virtualbox.org/) 7.x
 - [Vagrant](https://www.vagrantup.com/) 2.4+
-- ~16 GB RAM and ~50 GB disk available
+- **32 GB RAM** to run all 4 VMs simultaneously (16 GB is enough for 1–2 VMs)
+- ~50 GB disk available
 
 ### macOS
 
@@ -83,17 +84,29 @@ sudo apt-get install -y virtualbox vagrant
 ```bash
 # 1. Create and provision all VMs (~5 min)
 vagrant up
-      # macOS/Linux
-# On Windows (Git Bash): bash configure-ufw.sh
+
+# 2. Apply firewall rules
+bash configure-ufw.sh
 
 # 3. Verify firewall policies
 bash test-firewall.sh
 ```
 
-> **Windows users:** Run commands from Git Bash or WSL. PowerShell works for `vagrant` commands but the bash scripts need a Unix shell.. Verify firewall policies
-> bash test-firewall.sh
+> **Windows users:** Run commands from Git Bash or WSL. PowerShell works for `vagrant` commands but the bash scripts need a Unix shell.
 
-````
+### Running Individual VMs
+
+You don't have to bring up the entire topology at once. Target a single VM by name:
+
+```bash
+vagrant up vm1-gw            # Start only the gateway
+vagrant up vm2-srv vm6-dmz   # Start two specific VMs
+vagrant halt vm3-ca          # Stop one VM without affecting the others
+vagrant destroy vm6-dmz -f   # Destroy and recreate just the DMZ
+vagrant provision vm2-srv    # Re-run the provisioner on one VM
+```
+
+This is especially important if your machine has less than 32 GB of RAM — running all 4 VMs at once will exhaust memory and cause swapping or crashes. On a 16 GB machine, bring up only the VMs you need (e.g. `vm1-gw` + `vm2-srv`). Note that inter-VLAN routing requires VM1 to be running, so always start `vm1-gw` first if other VMs need connectivity beyond their own subnet.
 
 ## Scripts
 
@@ -120,7 +133,7 @@ vagrant ssh vm1-gw
 vagrant ssh vm2-srv
 vagrant ssh vm3-ca
 vagrant ssh vm6-dmz
-````
+```
 
 ## Interface Mapping (VirtualBox)
 
@@ -153,11 +166,17 @@ All VMs have a Vagrant NAT adapter (`enp0s3`) for management. VLAN interfaces:
 ## Vagrant Tips
 
 ```bash
-vagrant status              # VM states
+# All-VM commands (operate on every VM in the Vagrantfile)
+vagrant status              # Show state of all VMs
+vagrant up                  # Create/start all VMs
 vagrant halt                # Stop all VMs (preserves disk)
-vagrant up                  # Start stopped VMs
-vagrant provision vm2-srv   # Re-run provisioner on one VM
-vagrant destroy -f          # Delete everything
+vagrant destroy -f          # Delete all VMs and their disks
+
+# Single-VM commands (append the VM name)
+vagrant up vm1-gw           # Start only the gateway
+vagrant halt vm2-srv        # Stop only the server
+vagrant provision vm3-ca    # Re-run provisioner on one VM
+vagrant destroy vm6-dmz -f  # Destroy one VM
 
 # Snapshots
 vagrant snapshot save vm1-gw clean-baseline
