@@ -3,7 +3,7 @@
 # Configure UFW for ACME Stockholm VMs (Vagrant/VirtualBox)
 # =============================================================================
 # Run from the project directory (where Vagrantfile lives):
-#   bash configure-ufw.sh
+#   bash configure-ufw-stockholm.sh
 #
 # Interface mapping (VirtualBox):
 #   enp0s3  = Vagrant NAT (management/internet)
@@ -12,6 +12,7 @@
 #   enp0s10 = Third private_network  (VM1 only: VLAN 30)
 # =============================================================================
 set -euo pipefail
+
 
 echo "====================================================="
 echo " Configuring UFW for ACME Stockholm VMs"
@@ -124,6 +125,6 @@ run_on vm6-dmz "ufw --force enable"
 
 
 echo "====================================================="
-echo " UFW configuration complete!"
+echo " Stockholm UFW configuration complete!"
 echo " Verify with: vagrant ssh <vm> -c 'sudo ufw status verbose'"
 echo "====================================================="

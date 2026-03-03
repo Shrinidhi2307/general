@@ -1,25 +1,32 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 # =============================================================================
-# ACME Stockholm Site — VirtualBox VMs via Vagrant
+# ACME Multi-Site Network — VirtualBox VMs via Vagrant
 # =============================================================================
-# Creates VM1 (Gateway), VM2 (Server), VM3 (CA), VM6 (DMZ).
-# London (VM4, VM5) runs on a teammate's laptop.
+# Creates Stockholm: VM1 (Gateway), VM2 (Server), VM3 (CA), VM6 (DMZ)
+#         London:    VM4 (Gateway), VM5 (RADIUS Proxy)
 #
 # USAGE:
 #   brew install --cask virtualbox vagrant
-#   vagrant up
+#   vagrant up                    # All VMs
+#   vagrant up vm4-gw vm5-radius  # London only
 #   vagrant ssh vm1-gw
 #
 # NETWORKING:
 #   Each VM gets a Vagrant NAT adapter (enp0s3) for management/provisioning.
 #   VLAN interfaces use VirtualBox internal networks:
+#
+#   Stockholm:
 #     acme-vlan10  — Server VLAN (10.0.1.0/26)
 #     acme-vlan20  — Client VLAN (10.0.1.128/26)
 #     acme-vlan30  — DMZ VLAN   (10.0.1.240/28)
 #
-#   For IPsec to London on demo day, add a bridged adapter to VM1:
-#     gw.vm.network "public_network", bridge: "en0: Wi-Fi"
+#   London:
+#     london-vlan10 — Server VLAN (10.0.2.0/26)
+#     london-vlan20 — Client VLAN (10.0.2.128/26)
+#
+#   IPsec S2S tunnel connects the two sites via Vagrant NAT adapters
+#   (for local dev) or bridged adapters (for demo day).
 # =============================================================================
 
 Vagrant.configure("2") do |config|
@@ -99,5 +106,43 @@ Vagrant.configure("2") do |config|
       netmask: "255.255.255.240",
       virtualbox__intnet: "acme-vlan30"
     dmz.vm.provision "shell", path: "provision/vm6-dmz.sh"
+  end
+
+  # ──────────────────────────────────────────────
+  # VM4: London Gateway
+  # ──────────────────────────────────────────────
+  config.vm.define "vm4-gw" do |lgw|
+    lgw.vm.hostname = "vm4-gw"
+    lgw.vm.provider "virtualbox" do |vb|
+      vb.name = "acme-vm4-gw"
+      vb.memory = 2048
+      vb.cpus = 2
+    end
+    # London VLAN 10 — Server (enp0s8)
+    lgw.vm.network "private_network", ip: "10.0.2.1",
+      netmask: "255.255.255.192",
+      virtualbox__intnet: "london-vlan10"
+    # London VLAN 20 — Client (enp0s9)
+    lgw.vm.network "private_network", ip: "10.0.2.129",
+      netmask: "255.255.255.192",
+      virtualbox__intnet: "london-vlan20"
+    lgw.vm.provision "shell", path: "provision/vm4-gw.sh"
+  end
+
+  # ──────────────────────────────────────────────
+  # VM5: London RADIUS Proxy
+  # ──────────────────────────────────────────────
+  config.vm.define "vm5-radius" do |rad|
+    rad.vm.hostname = "vm5-radius"
+    rad.vm.provider "virtualbox" do |vb|
+      vb.name = "acme-vm5-radius"
+      vb.memory = 1024
+      vb.cpus = 1
+    end
+    # London VLAN 10 — Server (enp0s8)
+    rad.vm.network "private_network", ip: "10.0.2.2",
+      netmask: "255.255.255.192",
+      virtualbox__intnet: "london-vlan10"
+    rad.vm.provision "shell", path: "provision/vm5-radius.sh"
   end
 end

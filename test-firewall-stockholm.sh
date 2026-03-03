@@ -2,12 +2,13 @@
 # =============================================================================
 # Test Firewall Policies for ACME Stockholm VMs (Vagrant/VirtualBox)
 # =============================================================================
-# Run from the project directory (where Vagrantfile lives):
-#   bash test-firewall.sh
+# Run from the project directory:
+#   bash test-firewall-stockholm.sh
 # =============================================================================
 
+
 echo "=========================================================="
-echo " Running Firewall Policy Tests for ACME Stockholm"
+echo " Running Firewall Policy Tests — Stockholm"
 echo "=========================================================="
 
 PASS=0

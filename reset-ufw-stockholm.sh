@@ -1,14 +1,15 @@
 #!/bin/bash
 # =============================================================================
-# Reset UFW on all ACME Stockholm VMs (Vagrant/VirtualBox)
+# Reset UFW on ACME Stockholm VMs (Vagrant/VirtualBox)
 # =============================================================================
-# Run from the project directory (where Vagrantfile lives):
-#   bash reset-ufw.sh
+# Run from the project directory:
+#   bash reset-ufw-stockholm.sh
 # =============================================================================
 set -euo pipefail
 
+
 echo "====================================================="
-echo " Resetting UFW on all ACME Stockholm VMs"
+echo " Resetting UFW on ACME Stockholm VMs"
 echo "====================================================="
 
 run_on() {
@@ -23,11 +24,11 @@ for vm in vm1-gw vm2-srv vm3-ca vm6-dmz; do
     run_on "$vm" "ufw --force disable"
 done
 
-# Flush iptables FORWARD chain on gateway
+# Flush iptables FORWARD chain on Stockholm gateway
 run_on vm1-gw "iptables -F FORWARD"
 run_on vm1-gw "iptables -P FORWARD ACCEPT"
 
 echo "====================================================="
-echo " All UFW rules reset. Firewalls are disabled."
-echo " Run test-firewall.sh now — all tests should FAIL."
+echo " Stockholm UFW rules reset. Firewalls are disabled."
+echo " Run test-firewall-stockholm.sh — all tests should FAIL."
 echo "====================================================="
