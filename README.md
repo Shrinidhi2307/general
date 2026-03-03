@@ -62,7 +62,8 @@ sudo apt-get install -y virtualbox vagrant
 ## Quick Start
 
 ```bash
-# Bring up everything
+# Bring up everything.
+# !!WARNING TAKES 18> GB OF RAM!!
 vagrant up
 
 # Or just one site

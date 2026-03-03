@@ -138,6 +138,9 @@ Vagrant.configure("2") do |config|
       vb.name = "acme-vm5-radius"
       vb.memory = 2048
       vb.cpus = 1
+      # VBox NAT defaults to 10.0.2.0/24 (gateway 10.0.2.2), which conflicts
+      # with VM5's intnet IP 10.0.2.2. Shift NAT to a different subnet.
+      vb.customize ["modifyvm", :id, "--natnet1", "10.0.100.0/24"]
     end
     # London VLAN 10 — Server (enp0s8)
     rad.vm.network "private_network", ip: "10.0.2.2",
