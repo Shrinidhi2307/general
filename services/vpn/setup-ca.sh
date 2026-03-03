@@ -53,10 +53,14 @@ else
 fi
 
 # ── Generate & Sign Stockholm Gateway Cert ──
+# NOTE: --subject-alt-name adds a SAN entry so StrongSwan can match
+#       leftid=@stockholm.acme.corp against the certificate.
 if [ ! -f "$PKI_DIR/issued/stockholm.crt" ]; then
     echo ">>> Generating Stockholm gateway certificate..."
-    EASYRSA_BATCH=1 EASYRSA_REQ_CN="stockholm.acme.corp" ./easyrsa gen-req stockholm nopass
-    EASYRSA_BATCH=1 ./easyrsa sign-req server stockholm
+    EASYRSA_BATCH=1 EASYRSA_REQ_CN="stockholm.acme.corp" \
+        ./easyrsa --subject-alt-name="DNS:stockholm.acme.corp" gen-req stockholm nopass
+    EASYRSA_BATCH=1 \
+        ./easyrsa --subject-alt-name="DNS:stockholm.acme.corp" sign-req server stockholm
 else
     echo ">>> Stockholm cert already exists, skipping..."
 fi
@@ -64,8 +68,10 @@ fi
 # ── Generate & Sign London Gateway Cert ──
 if [ ! -f "$PKI_DIR/issued/london.crt" ]; then
     echo ">>> Generating London gateway certificate..."
-    EASYRSA_BATCH=1 EASYRSA_REQ_CN="london.acme.corp" ./easyrsa gen-req london nopass
-    EASYRSA_BATCH=1 ./easyrsa sign-req server london
+    EASYRSA_BATCH=1 EASYRSA_REQ_CN="london.acme.corp" \
+        ./easyrsa --subject-alt-name="DNS:london.acme.corp" gen-req london nopass
+    EASYRSA_BATCH=1 \
+        ./easyrsa --subject-alt-name="DNS:london.acme.corp" sign-req server london
 else
     echo ">>> London cert already exists, skipping..."
 fi
