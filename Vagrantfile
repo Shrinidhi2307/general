@@ -25,8 +25,10 @@
 #     london-vlan10 — Server VLAN (10.0.2.0/26)
 #     london-vlan20 — Client VLAN (10.0.2.128/26)
 #
-#   IPsec S2S tunnel connects the two sites via Vagrant NAT adapters
-#   (for local dev) or bridged adapters (for demo day).
+#   WAN:
+#     acme-wan    — Point-to-point link between VM1 and VM4 (10.100.0.0/30)
+#
+#   IPsec S2S tunnel runs over the acme-wan link.
 # =============================================================================
 
 Vagrant.configure("2") do |config|
@@ -41,6 +43,10 @@ Vagrant.configure("2") do |config|
       vb.name = "acme-vm1-gw"
       vb.memory = 2048
       vb.cpus = 2
+      # VBox NAT defaults to 10.0.2.0/24 (gateway 10.0.2.2). The IPsec tunnel's
+      # rightsubnet 10.0.2.0/26 overlaps this, causing xfrm policies to capture
+      # NAT traffic and kill SSH. Shift NAT to a non-conflicting subnet.
+      vb.customize ["modifyvm", :id, "--natnet1", "10.0.100.0/24"]
     end
     # VLAN 10 — Server (enp0s8)
     gw.vm.network "private_network", ip: "10.0.1.1",
@@ -54,6 +60,10 @@ Vagrant.configure("2") do |config|
     gw.vm.network "private_network", ip: "10.0.1.241",
       netmask: "255.255.255.240",
       virtualbox__intnet: "acme-vlan30"
+    # WAN — Site-to-site link to London (enp0s11)
+    gw.vm.network "private_network", ip: "10.100.0.1",
+      netmask: "255.255.255.252",
+      virtualbox__intnet: "acme-wan"
     gw.vm.provision "shell", path: "provision/vm1-gw.sh"
   end
 
@@ -126,6 +136,10 @@ Vagrant.configure("2") do |config|
     lgw.vm.network "private_network", ip: "10.0.2.129",
       netmask: "255.255.255.192",
       virtualbox__intnet: "london-vlan20"
+    # WAN — Site-to-site link to Stockholm (enp0s10)
+    lgw.vm.network "private_network", ip: "10.100.0.2",
+      netmask: "255.255.255.252",
+      virtualbox__intnet: "acme-wan"
     lgw.vm.provision "shell", path: "provision/vm4-gw.sh"
   end
 

@@ -40,6 +40,22 @@ London:
 - VM1 and VM4 use DEFAULT_FORWARD_POLICY=DROP with explicit allow rules
 - IPsec (IKEv2) for site-to-site VPN between Stockholm and London
 
+### ⚠️ Known Pitfall: VirtualBox NAT Subnet vs IPsec Subnet Overlap
+
+VirtualBox assigns each VM a NAT adapter (enp0s3) on `10.0.2.0/24` by default (gateway `10.0.2.2`). This overlaps with London's VLAN subnets (`10.0.2.0/26`, `10.0.2.128/26`) used as IPsec `rightsubnet`/`leftsubnet`. This causes two distinct failure modes:
+
+1. **xfrm policy capture**: When StrongSwan installs IPsec policies for `10.0.2.0/26`, the kernel's xfrm framework intercepts NAT traffic destined for `10.0.2.2` (the VBox NAT gateway), killing SSH and all internet connectivity on the VM.
+
+2. **Route clobbering**: Adding broad routes like `ip route replace 10.0.2.0/24 via ...` replaces the NAT route `10.0.2.0/24 dev enp0s3`, again killing SSH.
+
+**Mitigations already in place** (do not remove):
+- VM1 and VM5 have `vb.customize ["modifyvm", :id, "--natnet1", "10.0.100.0/24"]` in the Vagrantfile, shifting NAT to a non-conflicting subnet.
+- `setup-s2s.sh` uses specific `/26` and `/28` routes (not `/24`) when adding routes for the remote site's subnets.
+
+**If a VM loses SSH after VPN changes**: The VM is likely still alive on the WAN link (`10.100.0.x`). Check from the peer gateway with `ping`. The fix is to destroy and rebuild the VM (`vagrant destroy vmX && vagrant up vmX`), ensuring the `--natnet1` customization is present in the Vagrantfile.
+
+**Rule of thumb**: Any VM whose intnet subnets overlap with `10.0.2.0/24` needs `--natnet1 "10.0.100.0/24"` in the Vagrantfile. Currently this applies to VM1 (IPsec rightsubnet) and VM5 (intnet IP `10.0.2.2`).
+
 ## Scripts
 
 All scripts run from the host in the project directory (where Vagrantfile lives).
