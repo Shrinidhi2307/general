@@ -39,6 +39,8 @@ Vagrant.configure("2") do |config|
   # ──────────────────────────────────────────────
   config.vm.define "vm1-gw", primary: true do |gw|
     gw.vm.hostname = "vm1-gw"
+    gw.vm.network "forwarded_port", guest: 80, host: 8080, id: "http"
+    gw.vm.network "forwarded_port", guest: 443, host: 8443, id: "https"
     gw.vm.provider "virtualbox" do |vb|
       vb.name = "acme-vm1-gw"
       vb.memory = 2048
