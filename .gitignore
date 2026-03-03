@@ -1,2 +1,17 @@
+# Vagrant / VirtualBox
 .vagrant/
+
+# Logs
 *.log
+
+# ── Secrets & credentials (never commit) ──
+# TLS certificates and private keys (generated per-deployment)
+services/certs/vm2/
+services/certs/clients/
+services/vpn/certs/
+
+# Syncthing device ID (unique per deployment)
+services/syncthing/vm2-device-id.txt
+
+# ── IDE / tools ──
+.claude/
