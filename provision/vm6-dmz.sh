@@ -2,7 +2,7 @@
 # =============================================================================
 # VM6 (DMZ) — Provisioner
 # Installs: docker, certbot, nginx
-# Configures: inter-VLAN routes through VM1
+# Configures: inter-VLAN routes through VM1, Docker Web App, Nginx Reverse Proxy
 # =============================================================================
 set -euo pipefail
 
@@ -30,4 +30,55 @@ network:
 YAML
 netplan apply 2>/dev/null || true
 
-echo ">>> VM6 (DMZ) provisioned."
+# ── Docker Web Service ──
+echo ">>> Setting up Docker Web Service..."
+# 如果容器已经存在就先删除，保证脚本可以重复运行不报错
+docker rm -f my-web 2>/dev/null || true
+docker run -d --name my-web -p 8080:80 nginx
+
+# ── HTTPS Certificate (Self-Signed) ──
+echo ">>> Generating Self-Signed SSL Certificate..."
+mkdir -p /etc/nginx/ssl/acme/
+# 自动生成自签名证书
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/nginx/ssl/acme/nginx-proxy.key.pem \
+    -out /etc/nginx/ssl/acme/nginx-proxy.cert.pem \
+    -subj "/C=SE/ST=Stockholm/L=Stockholm/O=ACME Corp/OU=IT/CN=dmz.local" 2>/dev/null
+
+# ── Nginx Reverse Proxy & Security Config ──
+echo ">>> Configuring Nginx Reverse Proxy..."
+cat > /etc/nginx/sites-available/default << 'EOF'
+# 全局防 DoS 限流设置：单个 IP 每秒最多 10 次请求
+limit_req_zone $binary_remote_addr zone=acme_limit:10m rate=10r/s;
+
+# HTTP (80) -> 强制跳转到 HTTPS (443)
+server {
+    listen 80 default_server;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+
+# HTTPS (443) -> 反向代理给 Docker 容器
+server {
+    listen 443 ssl default_server;
+    server_name _;
+
+    ssl_certificate /etc/nginx/ssl/acme/nginx-proxy.cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/acme/nginx-proxy.key.pem;
+
+    limit_req zone=acme_limit burst=20 nodelay;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+EOF
+
+# 重启 Nginx 使配置生效
+systemctl restart nginx
+
+echo ">>> VM6 (DMZ) provisioned completely."
