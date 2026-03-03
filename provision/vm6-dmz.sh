@@ -30,10 +30,18 @@ network:
 YAML
 netplan apply 2>/dev/null || true
 
+# Sleep 5 to allow netplan to stabilize. Otherwise docker pull might fail
+sleep 5
+
 # ── Docker Web Service ──
 echo ">>> Setting up Docker Web Service..."
 # 如果容器已经存在就先删除，保证脚本可以重复运行不报错
 docker rm -f my-web 2>/dev/null || true
+
+docker pull nginx
+
+# NOTE: This nginx is just an example of the "spin-off web"
+# The real nginx doing the reverse proxy is installed through apt earlier
 docker run -d --name my-web -p 8080:80 nginx
 
 # ── HTTPS Certificate (Self-Signed) ──
