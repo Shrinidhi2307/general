@@ -24,6 +24,7 @@ EOF
 # ── NAT Masquerade ──
 # enp0s3 = Vagrant NAT (internet-facing)
 # enp0s8 = VLAN 10,  enp0s9 = VLAN 20,  enp0s10 = VLAN 30
+# WAN interface name varies (enp0s11 or enp0s16 depending on VBox PCI slot)
 iptables -t nat -C POSTROUTING -o enp0s3 -s 10.0.1.0/24 -j MASQUERADE 2>/dev/null || \
     iptables -t nat -A POSTROUTING -o enp0s3 -s 10.0.1.0/24 -j MASQUERADE
 iptables -C FORWARD -i enp0s8 -o enp0s3 -j ACCEPT 2>/dev/null || \
@@ -32,6 +33,9 @@ iptables -C FORWARD -i enp0s10 -o enp0s3 -j ACCEPT 2>/dev/null || \
     iptables -A FORWARD -i enp0s10 -o enp0s3 -j ACCEPT
 iptables -C FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || \
     iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# ── Route to London subnets via WAN link ──
+# WAN interface is configured by services/vpn/setup-s2s.sh (auto-detects name)
 
 # Persist iptables across reboots
 echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
