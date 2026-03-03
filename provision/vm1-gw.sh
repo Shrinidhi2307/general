@@ -2,7 +2,7 @@
 # =============================================================================
 # VM1 (Stockholm Gateway) — Provisioner
 # Installs: strongswan, suricata, fail2ban
-# Configures: IP forwarding, NAT masquerade, inter-VLAN routing
+# Configures: IP forwarding, NAT masquerade, inter-VLAN routing, DMZ Firewall
 # =============================================================================
 set -euo pipefail
 
@@ -21,10 +21,11 @@ cat > /etc/sysctl.d/99-acme-forward.conf << 'EOF'
 net.ipv4.ip_forward=1
 EOF
 
-# ── NAT Masquerade ──
+# ── NAT Masquerade & Firewall ──
 # enp0s3 = Vagrant NAT (internet-facing)
-# enp0s8 = VLAN 10,  enp0s9 = VLAN 20,  enp0s10 = VLAN 30
+# enp0s8 = VLAN 10,  enp0s9 = VLAN 20,  enp0s10 = DMZ (10.0.1.240/28)
 # WAN interface name varies (enp0s11 or enp0s16 depending on VBox PCI slot)
+
 iptables -t nat -C POSTROUTING -o enp0s3 -s 10.0.1.0/24 -j MASQUERADE 2>/dev/null || \
     iptables -t nat -A POSTROUTING -o enp0s3 -s 10.0.1.0/24 -j MASQUERADE
 iptables -C FORWARD -i enp0s8 -o enp0s3 -j ACCEPT 2>/dev/null || \
@@ -33,6 +34,10 @@ iptables -C FORWARD -i enp0s10 -o enp0s3 -j ACCEPT 2>/dev/null || \
     iptables -A FORWARD -i enp0s10 -o enp0s3 -j ACCEPT
 iptables -C FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || \
     iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -C FORWARD -s 10.0.1.0/24 -d 10.0.1.240/28 -p tcp -m multiport --dports 80,443 -j ACCEPT 2>/dev/null || \
+    iptables -A FORWARD -s 10.0.1.0/24 -d 10.0.1.240/28 -p tcp -m multiport --dports 80,443 -j ACCEPT
+iptables -C FORWARD -s 10.0.1.240/28 -d 10.0.1.0/24 -j DROP 2>/dev/null || \
+    iptables -A FORWARD -s 10.0.1.240/28 -d 10.0.1.0/24 -j DROP
 
 # ── Route to London subnets via WAN link ──
 # WAN interface is configured by services/vpn/setup-s2s.sh (auto-detects name)
