@@ -136,7 +136,7 @@ Vagrant.configure("2") do |config|
     rad.vm.hostname = "vm5-radius"
     rad.vm.provider "virtualbox" do |vb|
       vb.name = "acme-vm5-radius"
-      vb.memory = 1024
+      vb.memory = 2048
       vb.cpus = 1
     end
     # London VLAN 10 — Server (enp0s8)
