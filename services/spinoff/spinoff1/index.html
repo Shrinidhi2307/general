@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spinoff 1 — ACME Group 17</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body class="spinoff-1">
+    <div class="container">
+        <span class="badge">ACME Corp — Group 17</span>
+        <h1>Spinoff 1</h1>
+        <p class="subtitle">spinoff1.forkhub.one</p>
+
+        <div class="tls-info">
+            <h2>Connection Security</h2>
+            <div class="tls-row">
+                <span class="tls-label">Protocol</span>
+                <span class="tls-value"><!--#echo var="ssl_protocol" --></span>
+            </div>
+            <div class="tls-row">
+                <span class="tls-label">Cipher</span>
+                <span class="tls-value"><!--#echo var="ssl_cipher" --></span>
+            </div>
+            <div class="tls-row">
+                <span class="tls-label">Server Name (SNI)</span>
+                <span class="tls-value"><!--#echo var="ssl_server_name" --></span>
+            </div>
+            <div class="tls-row">
+                <span class="tls-label">Certificate Issuer</span>
+                <span class="tls-value ok">Let's Encrypt (R13)</span>
+            </div>
+            <div class="tls-row">
+                <span class="tls-label">Certificate CN</span>
+                <span class="tls-value">spinoff1.forkhub.one</span>
+            </div>
+        </div>
+
+        <footer>EP2520 Building Networked Systems Security — KTH VT26</footer>
+    </div>
+</body>
+</html>
