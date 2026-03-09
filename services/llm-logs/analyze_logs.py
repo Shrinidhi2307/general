@@ -46,12 +46,22 @@ def flatten_schema(schema: dict) -> dict:
 
 
 def acquire_lock():
-    """Acquire an exclusive lock to prevent overlapping cron runs."""
+    """Acquire an exclusive lock to prevent overlapping cron runs.
+
+    Uses fcntl.flock which is automatically released by the OS when
+    the process exits (even on crash/SIGKILL). Pass --force to remove
+    a stale lock file before attempting to acquire.
+    """
+    if "--force" in sys.argv and LOCK_FILE.exists():
+        LOCK_FILE.unlink()
+        print("Removed stale lock file.")
+
     lock_fp = open(LOCK_FILE, "w")
     try:
         fcntl.flock(lock_fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         print("Another instance is already running. Exiting.")
+        print("If this is a stale lock, run with --force to clear it.")
         sys.exit(0)
     return lock_fp
 
@@ -213,19 +223,20 @@ def process_source(source: dict, state: dict) -> dict:
 
 def main():
     lock_fp = acquire_lock()
-    state = load_state()
+    try:
+        state = load_state()
 
-    print(f"Secure LLM Log Analyzer — {date.today().isoformat()}")
-    print(f"Model: {MODEL} | Chunk size: {CHUNK_SIZE_LINES} lines\n")
+        print(f"Secure LLM Log Analyzer — {date.today().isoformat()}")
+        print(f"Model: {MODEL} | Chunk size: {CHUNK_SIZE_LINES} lines\n")
 
-    for source in LOG_SOURCES:
-        state[source["name"]] = process_source(source, state)
+        for source in LOG_SOURCES:
+            state[source["name"]] = process_source(source, state)
 
-    save_state(state)
-
-    lock_fp.close()
-    LOCK_FILE.unlink(missing_ok=True)
-    print("\nDone.")
+        save_state(state)
+        print("\nDone.")
+    finally:
+        lock_fp.close()
+        LOCK_FILE.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
