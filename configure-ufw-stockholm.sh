@@ -75,6 +75,13 @@ run_on vm1-gw "ufw route deny from 10.0.1.128/25 to 10.0.1.3 comment 'VLAN 20 to
 run_on vm1-gw "ufw route allow from 10.0.1.128/25 to 10.0.1.0/26 port 443,8384 proto tcp comment 'VLAN 20 to VLAN 10 (HTTPS, Syncthing)'"
 run_on vm1-gw "ufw route allow from 10.0.1.128/25 to 10.0.1.0/26 port 53 comment 'VLAN 20 to VLAN 10 (DNS)'"
 
+# 5. VPN Roadwarrior clients (10.0.3.0/24) arriving via S2S tunnel
+#    Block VPN to CA (VM3) first, then allow limited services
+run_on vm1-gw "ufw route deny from 10.0.3.0/24 to 10.0.1.3 comment 'Block VPN to VM3 (CA)'"
+run_on vm1-gw "ufw route deny from 10.0.3.0/24 to 10.0.1.240/28 comment 'Block VPN to DMZ'"
+run_on vm1-gw "ufw route allow from 10.0.3.0/24 to 10.0.1.0/26 port 443,8384 proto tcp comment 'VPN to VLAN 10 (HTTPS, Syncthing)'"
+run_on vm1-gw "ufw route allow from 10.0.3.0/24 to 10.0.1.0/26 port 53 comment 'VPN to VLAN 10 (DNS)'"
+
 # Enable UFW
 run_on vm1-gw "ufw --force enable"
 

@@ -125,6 +125,8 @@ Vagrant.configure("2") do |config|
   # ──────────────────────────────────────────────
   config.vm.define "vm4-gw" do |lgw|
     lgw.vm.hostname = "vm4-gw"
+    lgw.vm.network "forwarded_port", guest: 1194, host: 1194,
+      protocol: "udp", id: "openvpn"
     lgw.vm.provider "virtualbox" do |vb|
       vb.name = "acme-vm4-gw"
       vb.memory = 2048

@@ -38,8 +38,8 @@ run_on vm4-gw "sed -i 's/DEFAULT_FORWARD_POLICY=\"ACCEPT\"/DEFAULT_FORWARD_POLIC
 vagrant ssh vm4-gw -- sudo bash -s << 'RULES_EOF'
 # Remove any existing NAT section
 sed -i '/^\*nat/,/^COMMIT/d' /etc/ufw/before.rules
-# Inject NAT at top of file
-sed -i '1i *nat\n:POSTROUTING ACCEPT [0:0]\n-A POSTROUTING -s 10.0.2.0/24 -o enp0s3 -j MASQUERADE\nCOMMIT\n' /etc/ufw/before.rules
+# Inject NAT at top of file (masquerade London + VPN subnets, exclude S2S traffic)
+sed -i '1i *nat\n:POSTROUTING ACCEPT [0:0]\n-A POSTROUTING -s 10.0.2.0/24 -d 10.0.1.0/24 -j ACCEPT\n-A POSTROUTING -s 10.0.3.0/24 -d 10.0.1.0/24 -j ACCEPT\n-A POSTROUTING -s 10.0.2.0/24 -o enp0s3 -j MASQUERADE\n-A POSTROUTING -s 10.0.3.0/24 -o enp0s3 -j MASQUERADE\nCOMMIT\n' /etc/ufw/before.rules
 # Remove blanket ICMP echo-request from FORWARD chain
 sed -i '/ufw-before-forward.*icmp.*echo-request/d' /etc/ufw/before.rules
 RULES_EOF
@@ -65,6 +65,13 @@ run_on vm4-gw "ufw route allow in on enp0s9 out on enp0s3 from 10.0.2.128/26 to 
 run_on vm4-gw "ufw route allow from 10.0.2.128/26 to 10.0.2.0/26 port 443,8384 proto tcp comment 'London VLAN 20 to VLAN 10 (HTTPS, Syncthing)'"
 run_on vm4-gw "ufw route allow from 10.0.2.128/26 to 10.0.2.0/26 port 53 comment 'London VLAN 20 to VLAN 10 (DNS)'"
 run_on vm4-gw "ufw route allow from 10.0.2.128/26 to 10.0.2.0/26 port 1812,1813 proto udp comment 'London VLAN 20 to RADIUS'"
+
+# 3. VPN Roadwarrior clients (10.0.3.0/24) — split-tunnel access
+#    Block VPN to CA (VM3) first, then allow limited services
+run_on vm4-gw "ufw route deny from 10.0.3.0/24 to 10.0.1.3 comment 'Block VPN to VM3 (CA)'"
+run_on vm4-gw "ufw route allow from 10.0.3.0/24 to 10.0.1.0/26 port 443,8384 proto tcp comment 'VPN to Stockholm VLAN 10 (HTTPS, Syncthing)'"
+run_on vm4-gw "ufw route allow from 10.0.3.0/24 to 10.0.1.0/26 port 53 comment 'VPN to Stockholm VLAN 10 (DNS)'"
+run_on vm4-gw "ufw route allow from 10.0.3.0/24 to 10.0.2.0/26 port 443 proto tcp comment 'VPN to London VLAN 10 (HTTPS)'"
 
 # Enable UFW
 run_on vm4-gw "ufw --force enable"
