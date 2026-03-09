@@ -2,7 +2,7 @@
 # =============================================================================
 # VM2 (Stockholm Server) — Provisioner
 # Installs: nginx, bind9, docker, python3
-# Configures: inter-VLAN routes through VM1
+# Purpose now: make internal web + DNS independently testable
 # =============================================================================
 set -euo pipefail
 
@@ -11,14 +11,13 @@ echo ">>> Provisioning VM2 (Server)..."
 # ── Packages ──
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    iptables iproute2 iputils-ping net-tools tcpdump curl \
+    iptables iproute2 iputils-ping net-tools tcpdump curl dnsutils \
     nginx bind9 bind9utils \
-    docker.io docker-compose python3-pip python3-venv
+    docker.io python3-pip python3-venv
 
-# ── Inter-VLAN routes via VM1 gateway ──
-# Without these, traffic to other VLANs would go via the Vagrant NAT
-# (bypassing VM1's firewall). These routes ensure inter-VLAN traffic
-# is routed through VM1 where firewall rules are enforced.
+# ── Optional inter-VLAN routes via VM1 gateway ──
+# Keep these for the old Vagrant topology, but VM2 should still be locally testable
+# even when Stockholm physical/router side is unavailable.
 cat > /etc/netplan/99-acme-routes.yaml << 'YAML'
 network:
   version: 2
@@ -32,18 +31,28 @@ network:
 YAML
 netplan apply 2>/dev/null || true
 
-echo ">>> VM2 (Server) provisioned."
-
 echo ">>> 1. Importing Certificates from VM3..."
-# 从共享文件夹把证书复制到 VM2 的系统目录中
 mkdir -p /etc/nginx/ssl
-cp /vagrant/shared_certs/ca.crt /etc/nginx/ssl/
-cp /vagrant/shared_certs/vm2-srv.crt /etc/nginx/ssl/
-cp /vagrant/shared_certs/vm2-srv.key /etc/nginx/ssl/
-chmod 600 /etc/nginx/ssl/*.key
+
+# Copy certs if present; do not fail hard if VM3/shared_certs is not ready yet
+if [ -f /vagrant/shared_certs/ca.crt ]; then
+    cp /vagrant/shared_certs/ca.crt /etc/nginx/ssl/
+fi
+
+if [ -f /vagrant/shared_certs/vm2-srv.crt ] && [ -f /vagrant/shared_certs/vm2-srv.key ]; then
+    cp /vagrant/shared_certs/vm2-srv.crt /etc/nginx/ssl/
+    cp /vagrant/shared_certs/vm2-srv.key /etc/nginx/ssl/
+    chmod 600 /etc/nginx/ssl/*.key
+else
+    echo ">>> VM3 certs not found, generating temporary self-signed cert for VM2..."
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout /etc/nginx/ssl/vm2-srv.key \
+        -out /etc/nginx/ssl/vm2-srv.crt \
+        -subj "/C=SE/ST=Stockholm/L=Stockholm/O=ACME/OU=IT/CN=secure.acme.com" >/dev/null 2>&1
+    chmod 600 /etc/nginx/ssl/vm2-srv.key
+fi
 
 echo ">>> 2. Configuring BIND9 (Internal DNS)..."
-# 让域名 secure.acme.com 指向 VM2 自己 (10.0.1.2)
 cat > /etc/bind/named.conf.local << 'EOF'
 zone "acme.com" {
     type master;
@@ -55,7 +64,7 @@ mkdir -p /etc/bind/zones
 cat > /etc/bind/zones/db.acme.com << 'EOF'
 $TTL    604800
 @       IN      SOA     ns1.acme.com. admin.acme.com. (
-                              2         ; Serial
+                              3         ; Serial
                          604800         ; Refresh
                           86400         ; Retry
                         2419200         ; Expire
@@ -63,27 +72,24 @@ $TTL    604800
 ;
 @       IN      NS      ns1.acme.com.
 ns1     IN      A       10.0.1.2
-secure  IN      A       10.0.1.2   ; 我们的核心安全网站
+secure  IN      A       10.0.1.2
 EOF
 
 systemctl restart named
 systemctl enable named
 
-
-echo ">>> 3. Configuring Nginx (Secure Web Server with mTLS)..."
-# 配置 Nginx 启用 HTTPS，并要求客户端出示 VM3 签发的证书
+echo ">>> 3. Configuring Nginx (Internal HTTPS Web Server)..."
 cat > /etc/nginx/sites-available/secure_site << 'EOF'
 server {
     listen 443 ssl;
     server_name secure.acme.com;
 
-    # 服务器自己的证书
     ssl_certificate /etc/nginx/ssl/vm2-srv.crt;
     ssl_certificate_key /etc/nginx/ssl/vm2-srv.key;
 
-    # 双向认证 (mTLS)：要求验证客户端证书
-    ssl_client_certificate /etc/nginx/ssl/ca.crt;
-    ssl_verify_client on; # on 表示强制要求，如果没有证书直接拒绝访问！
+    # Demo phase: normal HTTPS only.
+    # Access control should be enforced later by router/VPN/firewall rules.
+    ssl_verify_client off;
 
     location / {
         root /var/www/html/secure;
@@ -92,13 +98,26 @@ server {
 }
 EOF
 
-# 创建一个测试网页
 mkdir -p /var/www/html/secure
-echo "<h1>Welcome to ACME Secure Headquarters Data (mTLS Authenticated)</h1>" > /var/www/html/secure/index.html
+cat > /var/www/html/secure/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ACME Secure Portal</title>
+</head>
+<body>
+    <h1>Welcome to ACME Secure Internal Portal</h1>
+    <p>This VM2-hosted internal site is ready for testing.</p>
+    <p>In the final setup, access should only be allowed from Employee networks or via VPN.</p>
+</body>
+</html>
+EOF
 
-# 启用站点并重启 Nginx
-ln -s /etc/nginx/sites-available/secure_site /etc/nginx/sites-enabled/ || true
+ln -sf /etc/nginx/sites-available/secure_site /etc/nginx/sites-enabled/secure_site
 rm -f /etc/nginx/sites-enabled/default
+
+nginx -t
 systemctl restart nginx
 systemctl enable nginx
 
