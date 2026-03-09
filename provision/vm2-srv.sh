@@ -13,7 +13,7 @@ apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     iptables iproute2 iputils-ping net-tools tcpdump curl \
     nginx bind9 bind9utils \
-    docker.io python3-pip python3-venv
+    docker.io docker-compose python3-pip python3-venv
 
 # ── Inter-VLAN routes via VM1 gateway ──
 # Without these, traffic to other VLANs would go via the Vagrant NAT

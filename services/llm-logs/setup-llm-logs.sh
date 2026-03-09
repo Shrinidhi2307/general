@@ -28,12 +28,17 @@ if ! dpkg -s nvidia-container-toolkit &>/dev/null; then
     systemctl restart docker
 fi
 
-# ── Install docker compose plugin if missing ──
-if ! docker compose version &>/dev/null; then
-    echo ">>> Installing docker-compose-plugin..."
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker-compose-plugin
+# ── Detect docker compose command ──
+if docker compose version &>/dev/null; then
+    DC="docker compose"
+elif command -v docker-compose &>/dev/null; then
+    DC="docker-compose"
+else
+    echo "ERROR: Neither 'docker compose' nor 'docker-compose' found."
+    echo "Install with: apt-get install docker-compose"
+    exit 1
 fi
+echo ">>> Using: ${DC}"
 
 # ── Copy project files to install directory ──
 echo ">>> Installing to ${INSTALL_DIR}..."
@@ -47,7 +52,7 @@ cp "${SRC_DIR}/analyze_logs.py"    "${INSTALL_DIR}/"
 # ── Start Ollama container ──
 echo ">>> Starting Ollama container..."
 cd "${INSTALL_DIR}"
-docker compose up -d
+${DC} up -d
 
 # ── Wait for Ollama API to be ready ──
 echo ">>> Waiting for Ollama API..."
@@ -63,9 +68,9 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# ── Pull the model (this is the slow part — ~3GB download) ──
+# ── Pull the model (~3GB download) ──
 echo ">>> Pulling ${MODEL}... (this will take a while)"
-docker compose exec -T ollama ollama pull "${MODEL}"
+${DC} exec -T ollama ollama pull "${MODEL}"
 echo ">>> Model ${MODEL} pulled successfully."
 
 # ── Setup Python venv ──
@@ -110,7 +115,7 @@ fi
 echo ""
 echo "=== Setup complete ==="
 echo "  Install dir: ${INSTALL_DIR}"
-echo "  Model:       ${MODEL} (Q4_K_M)"
+echo "  Model:       ${MODEL}"
 echo "  Log sources: /var/log/auth.log, nginx access/error, syncthing"
 echo "  Findings:    ${INSTALL_DIR}/findings/"
 echo "  Cron:        every 5 minutes (dumps syncthing logs, then analyzes)"
