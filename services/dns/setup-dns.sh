@@ -84,6 +84,15 @@ zone "1.0.10.in-addr.arpa" {
     inline-signing yes;
     allow-query { internal; };
 };
+
+/* Split-horizon zone for spinoff websites (forkhub.one)
+ * Internally resolves spinoff1/spinoff2.forkhub.one to VM6 DMZ (10.0.1.242).
+ * External DNS for forkhub.one is unaffected — this only applies to internal clients. */
+zone "forkhub.one" {
+    type master;
+    file "/etc/bind/zones/db.forkhub.one";
+    allow-query { internal; };
+};
 LOCAL_EOF
 
 # ── 3. Zone files ─────────────────────────────────────────────────────────
@@ -142,6 +151,26 @@ cat > "${ZONE_DIR}/db.10.0.1" << REV_EOF
 242 IN PTR vm6.acme.internal.
 REV_EOF
 
+# Spinoff zone (split-horizon for forkhub.one)
+cat > "${ZONE_DIR}/db.forkhub.one" << SPINOFF_EOF
+\$ORIGIN forkhub.one.
+\$TTL 300
+
+@ IN SOA vm2.acme.internal. admin.acme.internal. (
+    ${SERIAL} ; serial
+    3600
+    900
+    604800
+    300
+)
+
+@   IN NS  vm2.acme.internal.
+
+; Spinoff websites — resolve to VM6 DMZ internally
+spinoff1    IN A   10.0.1.242
+spinoff2    IN A   10.0.1.242
+SPINOFF_EOF
+
 # Correct ownership so bind can read zone files
 chown -R bind:bind "$ZONE_DIR"
 
@@ -158,6 +187,7 @@ echo ">>> Validating named configuration..."
 named-checkconf
 named-checkzone "$ZONE" "${ZONE_DIR}/db.acme.internal"
 named-checkzone "1.0.10.in-addr.arpa" "${ZONE_DIR}/db.10.0.1"
+named-checkzone "forkhub.one" "${ZONE_DIR}/db.forkhub.one"
 
 echo ">>> Restarting bind9..."
 systemctl restart named
