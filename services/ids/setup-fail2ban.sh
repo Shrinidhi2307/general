@@ -112,6 +112,14 @@ port     = 500,4500
 filter   = strongswan
 logpath  = /var/log/syslog
 maxretry = 5
+
+[openvpn]
+enabled  = true
+port     = 1194
+protocol = udp
+filter   = openvpn
+logpath  = /var/log/openvpn/roadwarrior.log
+maxretry = 5
 JAIL_EOF
 
 # ── StrongSwan filter (same as VM1) ──
@@ -121,6 +129,17 @@ cat > /etc/fail2ban/filter.d/strongswan.conf << 'FILTER_EOF'
 failregex = ^.*charon.*<HOST>.*IKE_AUTH.*failed.*$
             ^.*charon.*<HOST>.*authentication.*failed.*$
             ^.*charon.*received AUTH_FAILED notify.*<HOST>.*$
+ignoreregex =
+FILTER_EOF
+
+# ── OpenVPN filter (detect TLS/auth failures) ──
+cat > /etc/fail2ban/filter.d/openvpn.conf << 'FILTER_EOF'
+# Fail2ban filter for OpenVPN authentication failures
+[Definition]
+failregex = ^.*<HOST>.*TLS Auth Error.*$
+            ^.*<HOST>.*VERIFY ERROR.*$
+            ^.*<HOST>.*TLS Error.*$
+            ^.*<HOST>.*AUTH_FAILED.*$
 ignoreregex =
 FILTER_EOF
 

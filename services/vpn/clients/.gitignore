@@ -1,0 +1,5 @@
+# VPN client configs contain private keys — never commit
+*.ovpn
+*.crt
+*.key
+*.p12
