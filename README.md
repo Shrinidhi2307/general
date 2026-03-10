@@ -99,7 +99,7 @@ vagrant provision vm2-srv    # Re-run the provisioner on one VM
 
 | VM  | Hostname | VLAN       | IP                   | Key Services                                  |
 | --- | -------- | ---------- | -------------------- | --------------------------------------------- |
-| VM1 | vm1-gw   | 10, 20, 30 | 10.0.1.1, .129, .241 | StrongSwan IPsec, Suricata IDS, Fail2ban, NAT |
+| VM1 | vm1-gw   | 10, 20, 30 | 10.0.1.1, .129, .241 | Suricata IDS, Fail2ban, NAT |
 | VM2 | vm2-srv  | 10         | 10.0.1.2             | Nginx, BIND9, Docker, Syncthing               |
 | VM3 | vm3-ca   | 10         | 10.0.1.3             | FreeRADIUS, Easy-RSA (air-gapped)             |
 | VM6 | vm6-dmz  | 30         | 10.0.1.242           | Docker, Nginx, Certbot                        |
