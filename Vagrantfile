@@ -52,9 +52,18 @@ Vagrant.configure("2") do |config|
     # Vagrant will prompt to select the host adapter; pick the USB-to-Ethernet
     # or wired NIC that is plugged into the router's LAN port.
     srv.vm.network "public_network",
-      ip: "10.0.1.10",
+      ip: "10.0.1.50",
       netmask: "255.255.255.192"
     srv.vm.provision "shell", path: "provision/vm2-srv.sh"
+    # Route fix must run on every boot (not just first provision)
+    srv.vm.provision "shell", run: "always", inline: <<-SHELL
+      if ip link show enp0s9 >/dev/null 2>&1; then
+        ip route del 10.0.1.0/26 dev enp0s8 2>/dev/null || true
+        ip route replace 10.0.1.0/26 dev enp0s9 src 10.0.1.50 metric 50
+        ip route add 10.0.1.0/26 dev enp0s8 src 10.0.1.2 metric 200 2>/dev/null || true
+        ip route add 10.0.1.128/26 via 10.0.1.1 dev enp0s9 2>/dev/null || true
+      fi
+    SHELL
   end
   # ──────────────────────────────────────────────
   # VM3: CA Server (air-gapped post-provision)

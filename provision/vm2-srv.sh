@@ -20,9 +20,11 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
 # enp0s8 wins and traffic to the router goes into the VirtualBox internal network.
 if ip link show enp0s9 >/dev/null 2>&1; then
     ip route del 10.0.1.0/26 dev enp0s8 2>/dev/null || true
-    ip route replace 10.0.1.0/26 dev enp0s9 src 10.0.1.10 metric 50
+    ip route replace 10.0.1.0/26 dev enp0s9 src 10.0.1.50 metric 50
     # Re-add enp0s8 route with higher metric so VM3 is still reachable via intnet
     ip route add 10.0.1.0/26 dev enp0s8 src 10.0.1.2 metric 200 2>/dev/null || true
+    # Route to Employee/Client subnet via the router
+    ip route add 10.0.1.128/26 via 10.0.1.1 dev enp0s9 2>/dev/null || true
 fi
 
 echo ">>> 1. Importing Certificates from VM3..."
@@ -65,8 +67,8 @@ $TTL    604800
                          604800 )       ; Negative Cache TTL
 ;
 @       IN      NS      ns1.acme.com.
-ns1     IN      A       10.0.1.10
-secure  IN      A       10.0.1.10
+ns1     IN      A       10.0.1.50
+secure  IN      A       10.0.1.50
 EOF
 
 systemctl restart named
@@ -76,7 +78,7 @@ echo ">>> 3. Configuring Nginx (Internal HTTPS Web Server)..."
 cat > /etc/nginx/sites-available/secure_site << 'EOF'
 server {
     listen 443 ssl default_server;
-    server_name secure.acme.com 10.0.1.10 _;
+    server_name secure.acme.com 10.0.1.50 _;
 
     ssl_certificate /etc/nginx/ssl/vm2-srv.crt;
     ssl_certificate_key /etc/nginx/ssl/vm2-srv.key;
