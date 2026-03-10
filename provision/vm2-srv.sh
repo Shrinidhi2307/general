@@ -18,18 +18,6 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
 # ── Optional inter-VLAN routes via VM1 gateway ──
 # Keep these for the old Vagrant topology, but VM2 should still be locally testable
 # even when Stockholm physical/router side is unavailable.
-cat > /etc/netplan/99-acme-routes.yaml << 'YAML'
-network:
-  version: 2
-  ethernets:
-    enp0s8:
-      routes:
-        - to: 10.0.1.128/26
-          via: 10.0.1.1
-        - to: 10.0.1.240/28
-          via: 10.0.1.1
-YAML
-netplan apply 2>/dev/null || true
 
 echo ">>> 1. Importing Certificates from VM3..."
 mkdir -p /etc/nginx/ssl
@@ -71,8 +59,8 @@ $TTL    604800
                          604800 )       ; Negative Cache TTL
 ;
 @       IN      NS      ns1.acme.com.
-ns1     IN      A       10.0.1.2
-secure  IN      A       10.0.1.2
+ns1     IN      A       10.0.1.10
+secure  IN      A       10.0.1.10
 EOF
 
 systemctl restart named
@@ -81,8 +69,8 @@ systemctl enable named
 echo ">>> 3. Configuring Nginx (Internal HTTPS Web Server)..."
 cat > /etc/nginx/sites-available/secure_site << 'EOF'
 server {
-    listen 443 ssl;
-    server_name secure.acme.com;
+    listen 443 ssl default_server;
+    server_name secure.acme.com 10.0.1.10 _;
 
     ssl_certificate /etc/nginx/ssl/vm2-srv.crt;
     ssl_certificate_key /etc/nginx/ssl/vm2-srv.key;

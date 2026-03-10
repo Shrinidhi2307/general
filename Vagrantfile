@@ -35,57 +35,23 @@ Vagrant.configure("2") do |config|
   config.vm.box = "ubuntu/jammy64"
 
   # ──────────────────────────────────────────────
-  # VM1: Stockholm Gateway
-  # ──────────────────────────────────────────────
-  config.vm.define "vm1-gw", primary: true do |gw|
-    gw.vm.hostname = "vm1-gw"
-    gw.vm.network "forwarded_port", guest: 80, host: 8080, id: "http"
-    gw.vm.network "forwarded_port", guest: 443, host: 8443, id: "https"
-    gw.vm.provider "virtualbox" do |vb|
-      vb.name = "acme-vm1-gw"
-      vb.memory = 2048
-      vb.cpus = 2
-      # VBox NAT defaults to 10.0.2.0/24 (gateway 10.0.2.2). The IPsec tunnel's
-      # rightsubnet 10.0.2.0/26 overlaps this, causing xfrm policies to capture
-      # NAT traffic and kill SSH. Shift NAT to a non-conflicting subnet.
-      vb.customize ["modifyvm", :id, "--natnet1", "10.0.100.0/24"]
-    end
-    # VLAN 10 — Server (enp0s8)
-    gw.vm.network "private_network", ip: "10.0.1.1",
-      netmask: "255.255.255.192",
-      virtualbox__intnet: "acme-vlan10"
-    # VLAN 20 — Client (enp0s9)
-    gw.vm.network "private_network", ip: "10.0.1.129",
-      netmask: "255.255.255.192",
-      virtualbox__intnet: "acme-vlan20"
-    # VLAN 30 — DMZ (enp0s10)
-    gw.vm.network "private_network", ip: "10.0.1.241",
-      netmask: "255.255.255.240",
-      virtualbox__intnet: "acme-vlan30"
-    # WAN — Site-to-site link to London (enp0s11)
-    gw.vm.network "private_network", ip: "10.100.0.1",
-      netmask: "255.255.255.252",
-      virtualbox__intnet: "acme-wan"
-    gw.vm.provision "shell", path: "provision/vm1-gw.sh"
-  end
-
-  # ──────────────────────────────────────────────
   # VM2: Stockholm Server
   # ──────────────────────────────────────────────
-  config.vm.define "vm2-srv" do |srv|
-    srv.vm.hostname = "vm2-srv"
-    srv.vm.provider "virtualbox" do |vb|
-      vb.name = "acme-vm2-srv"
-      vb.memory = 8192
-      vb.cpus = 4
-    end
-    # VLAN 10 — Server (enp0s8)
-    srv.vm.network "private_network", ip: "10.0.1.2",
-      netmask: "255.255.255.192",
-      virtualbox__intnet: "acme-vlan10"
-    srv.vm.provision "shell", path: "provision/vm2-srv.sh"
+config.vm.define "vm2-srv" do |srv|
+  srv.vm.hostname = "vm2-srv"
+  srv.vm.provider "virtualbox" do |vb|
+    vb.name = "acme-vm2-srv"
+    vb.memory = 8192
+    vb.cpus = 4
   end
 
+  # Original internal server VLAN
+ srv.vm.network "public_network",
+  ip: "10.0.1.10",
+  bridge: "TP-LINK Gigabit Ethernet USB Adapter"
+
+  srv.vm.provision "shell", path: "provision/vm2-srv.sh"
+end
   # ──────────────────────────────────────────────
   # VM3: CA Server (air-gapped post-provision)
   # ──────────────────────────────────────────────
@@ -118,31 +84,6 @@ Vagrant.configure("2") do |config|
       netmask: "255.255.255.240",
       virtualbox__intnet: "acme-vlan30"
     dmz.vm.provision "shell", path: "provision/vm6-dmz.sh"
-  end
-
-  # ──────────────────────────────────────────────
-  # VM4: London Gateway
-  # ──────────────────────────────────────────────
-  config.vm.define "vm4-gw" do |lgw|
-    lgw.vm.hostname = "vm4-gw"
-    lgw.vm.provider "virtualbox" do |vb|
-      vb.name = "acme-vm4-gw"
-      vb.memory = 2048
-      vb.cpus = 2
-    end
-    # London VLAN 10 — Server (enp0s8)
-    lgw.vm.network "private_network", ip: "10.0.2.1",
-      netmask: "255.255.255.192",
-      virtualbox__intnet: "london-vlan10"
-    # London VLAN 20 — Client (enp0s9)
-    lgw.vm.network "private_network", ip: "10.0.2.129",
-      netmask: "255.255.255.192",
-      virtualbox__intnet: "london-vlan20"
-    # WAN — Site-to-site link to Stockholm (enp0s10)
-    lgw.vm.network "private_network", ip: "10.100.0.2",
-      netmask: "255.255.255.252",
-      virtualbox__intnet: "acme-wan"
-    lgw.vm.provision "shell", path: "provision/vm4-gw.sh"
   end
 
   # ──────────────────────────────────────────────
