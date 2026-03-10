@@ -37,21 +37,25 @@ Vagrant.configure("2") do |config|
   # ──────────────────────────────────────────────
   # VM2: Stockholm Server
   # ──────────────────────────────────────────────
-config.vm.define "vm2-srv" do |srv|
-  srv.vm.hostname = "vm2-srv"
-  srv.vm.provider "virtualbox" do |vb|
-    vb.name = "acme-vm2-srv"
-    vb.memory = 8192
-    vb.cpus = 4
+  config.vm.define "vm2-srv" do |srv|
+    srv.vm.hostname = "vm2-srv"
+    srv.vm.provider "virtualbox" do |vb|
+      vb.name = "acme-vm2-srv"
+      vb.memory = 8192
+      vb.cpus = 4
+    end
+    # VLAN 10 — Server (enp0s8) — internal link to VM3/CA
+    srv.vm.network "private_network", ip: "10.0.1.2",
+      netmask: "255.255.255.192",
+      virtualbox__intnet: "acme-vlan10"
+    # Bridged adapter (enp0s9) — connects to physical LAN / OpenWrt router.
+    # Vagrant will prompt to select the host adapter; pick the USB-to-Ethernet
+    # or wired NIC that is plugged into the router's LAN port.
+    srv.vm.network "public_network",
+      ip: "10.0.1.10",
+      netmask: "255.255.255.192"
+    srv.vm.provision "shell", path: "provision/vm2-srv.sh"
   end
-
-  # Original internal server VLAN
- srv.vm.network "public_network",
-  ip: "10.0.1.10",
-  bridge: "TP-LINK Gigabit Ethernet USB Adapter"
-
-  srv.vm.provision "shell", path: "provision/vm2-srv.sh"
-end
   # ──────────────────────────────────────────────
   # VM3: CA Server (air-gapped post-provision)
   # ──────────────────────────────────────────────

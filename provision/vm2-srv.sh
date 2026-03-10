@@ -15,9 +15,15 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     nginx bind9 bind9utils \
     docker.io python3-pip python3-venv
 
-# ── Optional inter-VLAN routes via VM1 gateway ──
-# Keep these for the old Vagrant topology, but VM2 should still be locally testable
-# even when Stockholm physical/router side is unavailable.
+# ── Route fix: prefer bridged adapter (enp0s9) for the physical LAN ──
+# Both enp0s8 (intnet) and enp0s9 (bridged) share 10.0.1.0/26. Without this fix,
+# enp0s8 wins and traffic to the router goes into the VirtualBox internal network.
+if ip link show enp0s9 >/dev/null 2>&1; then
+    ip route del 10.0.1.0/26 dev enp0s8 2>/dev/null || true
+    ip route replace 10.0.1.0/26 dev enp0s9 src 10.0.1.10 metric 50
+    # Re-add enp0s8 route with higher metric so VM3 is still reachable via intnet
+    ip route add 10.0.1.0/26 dev enp0s8 src 10.0.1.2 metric 200 2>/dev/null || true
+fi
 
 echo ">>> 1. Importing Certificates from VM3..."
 mkdir -p /etc/nginx/ssl
