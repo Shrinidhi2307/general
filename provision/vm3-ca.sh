@@ -6,7 +6,8 @@
 # - keep previously issued employee/router certs in existing_ca (read-only)
 # - issue new employee/device certificates into shared_certs/issued
 # - issue SAN-enabled HTTPS server certificate for VM2
-# - keep existing FreeRADIUS and routing behavior unchanged
+# - prepare FreeRADIUS for EAP-TLS using internal CA
+# - keep routing behavior unchanged
 # =============================================================================
 set -euo pipefail
 
@@ -32,11 +33,9 @@ mkdir -p "$EXPORT_BASE"
 
 touch "$CA_DIR/index.txt"
 
-# Initialize only if not already present
 [ -f "$CA_DIR/serial" ] || echo "1000" > "$CA_DIR/serial"
 [ -f "$CA_DIR/crlnumber" ] || echo "1000" > "$CA_DIR/crlnumber"
 
-# Import root CA only once
 if [ ! -f "$CA_DIR/private/ca.key" ]; then
     echo ">>> Importing existing CA private key from seed_ca..."
     if [ ! -f "$SEED_DIR/ca.key" ]; then
@@ -57,13 +56,11 @@ if [ ! -f "$CA_DIR/certs/ca.crt" ]; then
     chmod 644 "$CA_DIR/certs/ca.crt"
 fi
 
-# If teammate provided a CA serial seed, use it only on first clean setup
 if [ -f "$SEED_DIR/ca.srl" ] && [ ! -s "$CA_DIR/index.txt" ]; then
     echo ">>> Importing CA serial seed..."
     cp "$SEED_DIR/ca.srl" "$CA_DIR/serial"
 fi
 
-# Make CA cert available in shared folder root for clients/VM2
 cp -f "$CA_DIR/certs/ca.crt" /vagrant/shared_certs/ca.crt
 chmod 644 /vagrant/shared_certs/ca.crt
 
@@ -72,7 +69,8 @@ chmod 644 /vagrant/shared_certs/ca.crt
 # -----------------------------------------------------------------------------
 echo ">>> Writing OpenSSL CA configuration..."
 
-cat > "$CA_DIR/openssl.cnf" <<'EOF'
+cat > "$CA_DIR/openssl.cnf" << 'EOF'
+
 [ ca ]
 default_ca = CA_default
 
@@ -141,7 +139,7 @@ EOF
 # -----------------------------------------------------------------------------
 echo ">>> Creating CA helper commands..."
 
-cat > /usr/local/bin/ca-issue-employee <<'EOF'
+cat > /usr/local/bin/ca-issue-employee << 'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -206,7 +204,7 @@ echo "Output: $OUT_DIR"
 EOF
 chmod +x /usr/local/bin/ca-issue-employee
 
-cat > /usr/local/bin/ca-issue-server <<'EOF'
+cat > /usr/local/bin/ca-issue-server << 'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -278,7 +276,7 @@ echo "Output:   $OUT_DIR"
 EOF
 chmod +x /usr/local/bin/ca-issue-server
 
-cat > /usr/local/bin/ca-list <<'EOF'
+cat > /usr/local/bin/ca-list << 'EOF'
 #!/bin/bash
 set -euo pipefail
 CA_DIR="/root/acme-ca"
@@ -300,7 +298,7 @@ find /vagrant/shared_certs/issued -mindepth 1 -maxdepth 1 \( -type d -o -type f 
 EOF
 chmod +x /usr/local/bin/ca-list
 
-cat > /usr/local/bin/ca-revoke <<'EOF'
+cat > /usr/local/bin/ca-revoke << 'EOF'
 #!/bin/bash
 set -euo pipefail
 
@@ -328,14 +326,13 @@ echo "Revoked $NAME and updated CRL."
 EOF
 chmod +x /usr/local/bin/ca-revoke
 
-# Create CRL file early if possible
 if [ ! -f "$CA_DIR/crl/ca.crl.pem" ]; then
     openssl ca -gencrl -config "$CA_DIR/openssl.cnf" -out "$CA_DIR/crl/ca.crl.pem" 2>/dev/null || true
 fi
 [ -f "$CA_DIR/crl/ca.crl.pem" ] && cp -f "$CA_DIR/crl/ca.crl.pem" /vagrant/shared_certs/issued/ca.crl.pem || true
 
 # -----------------------------------------------------------------------------
-# 5) Ensure VM2 web cert exists, but do not auto-create employee demo certs
+# 5) Ensure VM2 web cert exists
 # -----------------------------------------------------------------------------
 echo ">>> Ensuring VM2 server certificate exists..."
 
@@ -344,34 +341,84 @@ if [ ! -d "/vagrant/shared_certs/issued/vm2-srv" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 6) KEEP EXISTING RADIUS CONFIG EXACTLY AS BEFORE
+# 6) Prepare cert files for FreeRADIUS EAP-TLS
+# -----------------------------------------------------------------------------
+echo ">>> Preparing certificate files for FreeRADIUS EAP-TLS..."
+mkdir -p /etc/freeradius/3.0/certs/
+
+cp /vagrant/shared_certs/seed_ca/ca.crt /etc/freeradius/3.0/certs/ca.crt
+cp /vagrant/shared_certs/existing_ca/sthlm-router.crt /etc/freeradius/3.0/certs/sthlm-router.crt
+cp /vagrant/shared_certs/existing_ca/sthlm-router.key /etc/freeradius/3.0/certs/sthlm-router.key
+
+chown -R freerad:freerad /etc/freeradius/3.0/certs/
+chmod 644 /etc/freeradius/3.0/certs/ca.crt
+chmod 644 /etc/freeradius/3.0/certs/sthlm-router.crt
+chmod 640 /etc/freeradius/3.0/certs/sthlm-router.key
+
+# -----------------------------------------------------------------------------
+# 8) Configure FreeRADIUS users and clients (idempotent)
 # -----------------------------------------------------------------------------
 echo ">>> Configuring FreeRADIUS..."
-cat >> /etc/freeradius/3.0/users << 'EOF'
 
-testuser Cleartext-Password := "testpass123"
-alice    Cleartext-Password := "alice_password123"
-bob      Cleartext-Password := "bob_password456"
-EOF
+CLIENTS_FILE="/etc/freeradius/3.0/clients.conf"
 
-cat >> /etc/freeradius/3.0/clients.conf << 'EOF'
+if ! grep -q 'client sthlm-router {' "$CLIENTS_FILE"; then
+cat >> "$CLIENTS_FILE" << 'EOF'
 
 client sthlm-router {
     ipaddr = 10.0.1.0/24
     secret = acme_radius_secret
 }
+EOF
+fi
+
+if ! grep -q 'client london-proxy {' "$CLIENTS_FILE"; then
+cat >> "$CLIENTS_FILE" << 'EOF'
 
 client london-proxy {
     ipaddr = 10.0.2.2
     secret = acme_radius_secret
 }
 EOF
+fi
+
+ EAP_CONF="/etc/freeradius/3.0/mods-available/eap"
+MODS_ENABLED="/etc/freeradius/3.0/mods-enabled/eap"
+
+cat <<'EOF' > "$EAP_CONF"
+eap {
+    default_eap_type = tls
+    timer_expire = 60
+    ignore_unknown_eap_types = no
+    cisco_accounting_username_bug = no
+    max_sessions = 4096
+
+    tls-config private-network {
+        private_key_file = /etc/freeradius/3.0/certs/sthlm-router.key
+        certificate_file = /etc/freeradius/3.0/certs/sthlm-router.crt
+        ca_file = /etc/freeradius/3.0/certs/ca.crt
+
+        dh_file = /etc/freeradius/3.0/certs/dh
+        fragment_size = 1024
+        include_length = yes
+    }
+
+    tls {
+        tls = private-network
+    }
+}
+EOF
+
+ln -sf "$EAP_CONF" "$MODS_ENABLED"
+
+echo ">>> Validating FreeRADIUS configuration..."
+freeradius -XC
 
 systemctl restart freeradius
 systemctl enable freeradius
 
 # -----------------------------------------------------------------------------
-# 7) KEEP EXISTING NETWORK / EXTERNAL EXPOSURE PART EXACTLY AS BEFORE
+# 9) KEEP EXISTING NETWORK / EXTERNAL EXPOSURE PART EXACTLY AS BEFORE
 # -----------------------------------------------------------------------------
 echo ">>> Applying controlled routing..."
 cat > /etc/netplan/99-acme-airgap.yaml << 'YAML'

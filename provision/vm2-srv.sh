@@ -135,136 +135,514 @@ cat > /var/www/html/secure/index.html << 'EOF'
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ACME Secure Internal Portal</title>
     <style>
+        :root {
+            --bg: #f4f7fb;
+            --panel: #ffffff;
+            --text: #1f2937;
+            --muted: #64748b;
+            --primary: #1d4ed8;
+            --primary-dark: #1e40af;
+            --primary-soft: #dbeafe;
+            --success-bg: #dcfce7;
+            --success-text: #166534;
+            --border: #e2e8f0;
+            --shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
             font-family: Arial, sans-serif;
-            background: #f4f7fb;
-            color: #1f2937;
+            background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 100%);
+            color: var(--text);
         }
+
         .container {
-            max-width: 920px;
-            margin: 60px auto;
-            background: #ffffff;
-            padding: 40px;
-            border-radius: 18px;
-            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 48px 20px 56px;
         }
+
+        .panel {
+            background: var(--panel);
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: 1.3fr 0.85fr;
+            gap: 28px;
+            padding: 36px;
+        }
+
         .badge {
             display: inline-block;
             padding: 8px 14px;
             border-radius: 999px;
-            background: #dcfce7;
-            color: #166534;
+            background: var(--success-bg);
+            color: var(--success-text);
             font-weight: bold;
             margin-bottom: 18px;
+            font-size: 14px;
         }
+
         h1 {
-            margin-top: 0;
-            margin-bottom: 10px;
-            font-size: 34px;
+            margin: 0 0 12px 0;
+            font-size: 38px;
             color: #0f172a;
         }
+
+        h2 {
+            margin: 0 0 12px 0;
+            color: var(--primary);
+        }
+
+        h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 18px;
+            color: #0f172a;
+        }
+
         .subtitle {
             font-size: 18px;
             color: #475569;
-            margin-bottom: 28px;
+            line-height: 1.6;
+            margin-bottom: 20px;
         }
-        .section {
-            margin-top: 28px;
+
+        .hero-points {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
         }
-        .section h2 {
-            margin-bottom: 10px;
-            font-size: 20px;
-            color: #1d4ed8;
+
+        .pill {
+            background: #eef2ff;
+            color: #3730a3;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: bold;
         }
+
+        .notice {
+            margin-top: 18px;
+            padding: 16px 18px;
+            border-left: 4px solid var(--primary);
+            background: #eff6ff;
+            border-radius: 12px;
+            color: #1e3a8a;
+            line-height: 1.6;
+        }
+
+        .login-card {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 22px;
+        }
+
+        .login-note {
+            font-size: 14px;
+            color: var(--muted);
+            line-height: 1.6;
+            margin-bottom: 18px;
+        }
+
+        .field {
+            margin-bottom: 14px;
+        }
+
+        .field label {
+            display: block;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 6px;
+            color: #334155;
+        }
+
+        .field input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            font-size: 15px;
+            background: #fff;
+        }
+
+        .btn {
+            display: inline-block;
+            width: 100%;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 12px;
+            background: var(--primary);
+            color: white;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn.secondary {
+            background: #e2e8f0;
+            color: #1f2937;
+        }
+
+        .btn.secondary:hover {
+            background: #cbd5e1;
+        }
+
+        .mini-status {
+            margin-top: 14px;
+            background: var(--primary-soft);
+            color: #1e3a8a;
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .error {
+            margin-top: 12px;
+            background: #fee2e2;
+            color: #991b1b;
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .section-panel {
+            padding: 30px;
+            margin-top: 24px;
+        }
+
+        .section-panel p {
+            color: #475569;
+            line-height: 1.7;
+        }
+
         .grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(3, 1fr);
             gap: 18px;
-            margin-top: 14px;
+            margin-top: 18px;
         }
+
         .card {
             background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 14px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .card p, .card li {
+            color: #64748b;
+            line-height: 1.6;
+        }
+
+        .dashboard-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .user-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #eff6ff;
+            color: #1e3a8a;
+            padding: 10px 14px;
+            border-radius: 999px;
+            font-weight: bold;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .stat {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
             padding: 18px;
         }
+
+        .stat .label {
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .stat .value {
+            font-size: 26px;
+            font-weight: bold;
+            color: #0f172a;
+        }
+
+        .stat .sub {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #475569;
+        }
+
         ul {
             padding-left: 20px;
             margin: 10px 0 0 0;
         }
+
         li {
             margin-bottom: 8px;
         }
+
         code {
             background: #eef2ff;
             padding: 2px 6px;
             border-radius: 6px;
         }
+
         .footer {
-            margin-top: 36px;
+            margin-top: 18px;
             font-size: 14px;
             color: #64748b;
+            text-align: center;
         }
-        @media (max-width: 700px) {
-            .container {
-                margin: 20px;
-                padding: 24px;
+
+        @media (max-width: 960px) {
+            .hero {
+                grid-template-columns: 1fr;
             }
+
             .grid {
                 grid-template-columns: 1fr;
+            }
+
+            .dashboard {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            h1 {
+                font-size: 30px;
+            }
+
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .hero,
+            .section-panel {
+                padding: 22px;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="badge">Internal Service Active</div>
-        <h1>ACME Secure Internal Portal</h1>
-        <p class="subtitle">
-            Protected internal HTTPS service hosted on VM2 in the Stockholm office network.
-        </p>
+        <div id="loginView" class="panel hero">
+            <div>
+                <div class="badge">Internal Service Active</div>
+                <h1>ACME Secure Internal Portal</h1>
+                <p class="subtitle">
+                    Protected internal web portal hosted on VM2 in the Stockholm office network.
+                    This service is delivered over HTTPS using a certificate issued by ACME’s internal CA on VM3.
+                </p>
 
-        <div class="section">
-            <h2>Overview</h2>
-            <p>
-                This portal demonstrates ACME’s internal web service architecture for secure access to company resources.
-                In the finalized setup, access should be limited to authorized employee networks or through the secure remote access solution.
-            </p>
-        </div>
+                <div class="hero-points">
+                    <span class="pill">Internal PKI</span>
+                    <span class="pill">HTTPS Enabled</span>
+                    <span class="pill">RADIUS-backed Access Design</span>
+                    <span class="pill">Segmented Network</span>
+                </div>
 
-        <div class="grid">
-            <div class="card">
-                <h2>Security Features</h2>
-                <ul>
-                    <li>HTTPS-enabled internal web server</li>
-                    <li>Certificate-based trust model using internal CA</li>
-                    <li>Internal DNS record for the secure service</li>
-                    <li>Segregated internal network design</li>
-                </ul>
+                <div class="notice">
+                    This page demonstrates the user-facing portal experience. In the actual design,
+                    trust and access control are primarily enforced by ACME’s internal CA, employee network authentication,
+                    and protected routing policies rather than by this front-end form alone.
+                </div>
             </div>
 
-            <div class="card">
-                <h2>Service Information</h2>
-                <p><strong>Server:</strong> VM2 (Stockholm Server)</p>
-                <p><strong>Web stack:</strong> Nginx over TLS</p>
-                <p><strong>Address:</strong> <code>10.0.1.50</code></p>
-                <p><strong>Hostname:</strong> <code>secure.acme.com</code></p>
+            <div class="login-card">
+                <h2>Employee Access</h2>
+                <p class="login-note">
+                    Demonstration login interface for ACME employees. This is a front-end only demo view for the project presentation.
+                </p>
+
+                <form id="loginForm">
+                    <div class="field">
+                        <label for="username">Employee ID</label>
+                        <input id="username" type="text" placeholder="e.g. emp1">
+                    </div>
+
+                    <div class="field">
+                        <label for="password">Password</label>
+                        <input id="password" type="password" placeholder="Enter password">
+                    </div>
+
+                    <button type="submit" class="btn">Access Internal Portal</button>
+                </form>
+
+                <div id="loginError" class="error">
+                    Please enter an employee ID and password to continue.
+                </div>
+
+                <div class="mini-status">
+                    Demo note: after clicking login, the page switches to an internal employee dashboard.
+                    No real backend authentication is performed here.
+                </div>
             </div>
         </div>
 
-        <div class="section">
-            <h2>Project Context</h2>
-            <p>
-                This page is part of the EP2520 ACME network security demonstration environment.
-                It is used to verify secure internal service delivery, certificate deployment, and protected access design.
-            </p>
+        <div id="dashboardView" class="hidden">
+            <div class="panel section-panel">
+                <div class="dashboard-top">
+                    <div>
+                        <div class="badge">Authenticated Session (Demo)</div>
+                        <h1 style="font-size:34px; margin-bottom:8px;">Employee Dashboard</h1>
+                        <p class="subtitle" style="margin-bottom:0;">
+                            Welcome to the ACME internal employee portal.
+                        </p>
+                    </div>
+                    <div>
+                        <div class="user-chip">
+                            Signed in as <span id="displayUser">employee</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard">
+                    <div class="stat">
+                        <div class="label">Portal Status</div>
+                        <div class="value">Online</div>
+                        <div class="sub">HTTPS service available</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Server</div>
+                        <div class="value">VM2</div>
+                        <div class="sub">Stockholm secure web host</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Hostname</div>
+                        <div class="value">secure</div>
+                        <div class="sub">secure.acme.com</div>
+                    </div>
+                    <div class="stat">
+                        <div class="label">Trust Model</div>
+                        <div class="value">PKI</div>
+                        <div class="sub">Issued by internal CA</div>
+                    </div>
+                </div>
+
+                <div class="grid">
+                    <div class="card">
+                        <h3>Internal Security Overview</h3>
+                        <ul>
+                            <li>HTTPS-enabled internal web service</li>
+                            <li>Certificate issued by VM3 internal CA</li>
+                            <li>Internal DNS for <code>secure.acme.com</code></li>
+                            <li>Protected employee-network access design</li>
+                        </ul>
+                    </div>
+
+                    <div class="card">
+                        <h3>Available Internal Services</h3>
+                        <ul>
+                            <li>Secure employee portal access</li>
+                            <li>Internal name resolution with BIND9</li>
+                            <li>Certificate lifecycle support on VM3</li>
+                            <li>Support for network-layer authentication</li>
+                        </ul>
+                    </div>
+
+                    <div class="card">
+                        <h3>Session Details</h3>
+                        <ul>
+                            <li><strong>Logged-in user:</strong> <span id="sessionUser">employee</span></li>
+                            <li><strong>Web Server:</strong> Nginx</li>
+                            <li><strong>Address:</strong> <code>10.0.1.50</code></li>
+                            <li><strong>Certificate Issuer:</strong> ACME internal root CA</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="notice" style="margin-top:24px;">
+                    This dashboard is a presentation-layer demo. In the real architecture,
+                    internal trust is based on PKI, RADIUS-backed access policies, and secure routing rather than this front-end session alone.
+                </div>
+
+                <div style="margin-top:22px; max-width:220px;">
+                    <button id="logoutBtn" class="btn secondary">Sign out</button>
+                </div>
+            </div>
         </div>
 
         <div class="footer">
-            ACME Scandinavia — Internal demonstration portal
+            ACME Scandinavia — EP2520 internal security demonstration portal
         </div>
     </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const loginView = document.getElementById('loginView');
+        const dashboardView = document.getElementById('dashboardView');
+        const loginError = document.getElementById('loginError');
+        const displayUser = document.getElementById('displayUser');
+        const sessionUser = document.getElementById('sessionUser');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        loginForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            if (!username || !password) {
+                loginError.style.display = 'block';
+                return;
+            }
+
+            loginError.style.display = 'none';
+            displayUser.textContent = username;
+            sessionUser.textContent = username;
+
+            loginView.classList.add('hidden');
+            dashboardView.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        logoutBtn.addEventListener('click', function () {
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            loginView.classList.remove('hidden');
+            dashboardView.classList.add('hidden');
+            loginError.style.display = 'none';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    </script>
 </body>
 </html>
 EOF
