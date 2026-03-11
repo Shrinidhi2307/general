@@ -64,19 +64,15 @@ chmod -R 644 "$DEST_DIR"/*
 echo ">>> Configuring FreeRADIUS..."
 cat >> /etc/freeradius/3.0/users << 'EOF'
 
-alice Cleartext-Password := "alice_password123"
-bob   Cleartext-Password := "bob_password456"
+testuser Cleartext-Password := "testpass123"
+alice    Cleartext-Password := "alice_password123"
+bob      Cleartext-Password := "bob_password456"
 EOF
 
 cat >> /etc/freeradius/3.0/clients.conf << 'EOF'
 
 client sthlm-router {
-    ipaddr = 10.0.1.130
-    secret = acme_radius_secret
-}
-
-client london-router {
-    ipaddr = 10.0.2.130
+    ipaddr = 10.0.1.0/24
     secret = acme_radius_secret
 }
 
