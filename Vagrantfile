@@ -105,12 +105,13 @@ Vagrant.configure("2") do |config|
       vb.cpus = 1
       vb.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
     end
-    # VLAN 30 — DMZ (enp0s8) — internal link (kept for VLAN simulation)
-    dmz.vm.network "private_network", ip: "10.0.1.242",
+    # VLAN 30 — DMZ (enp0s8) — kept for VLAN simulation / interface numbering.
+    # Uses .241 (dummy) since nothing else is on acme-vlan30. Real traffic uses bridge.
+    dmz.vm.network "private_network", ip: "10.0.1.241",
       netmask: "255.255.255.240",
       virtualbox__intnet: "acme-vlan30"
     # Bridged adapter (enp0s9) — connects to physical LAN / Stockholm router.
-    # Router br-lan is 10.0.1.1/24, so VM6 at .242 is reachable on the same segment.
+    # Router br-lan is 10.0.1.1/24, DNS + DNAT point to .242.
     dmz.vm.network "public_network",
       ip: "10.0.1.242",
       netmask: "255.255.255.0"
@@ -119,10 +120,9 @@ Vagrant.configure("2") do |config|
     dmz.vm.provision "shell", run: "always", inline: <<-SHELL
       if ip link show enp0s9 >/dev/null 2>&1; then
         # Prefer bridge for router LAN traffic
-        ip route del 10.0.1.0/24 dev enp0s8 2>/dev/null || true
         ip route del 10.0.1.240/28 dev enp0s8 2>/dev/null || true
-        ip route replace 10.0.1.0/24 dev enp0s9 src 10.0.1.242 metric 50
-        ip route add 10.0.1.240/28 dev enp0s8 src 10.0.1.242 metric 200 2>/dev/null || true
+        ip route replace 10.0.1.0/26 dev enp0s9 src 10.0.1.242 metric 50
+        ip route add 10.0.1.240/28 dev enp0s8 src 10.0.1.241 metric 200 2>/dev/null || true
       fi
     SHELL
   end
