@@ -14,19 +14,25 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     iptables iproute2 iputils-ping net-tools tcpdump curl \
     docker.io certbot nginx
 
-# ── Inter-VLAN routes via gateway ──
-# VM6 is on VLAN 30 (10.0.1.240/28). Route to other VLANs through the gateway
-# so that firewall rules are enforced (DMZ isolation).
+# ── Routing via Stockholm router ──
+# VM6 reaches the router (10.0.1.1) via the bridged adapter (enp0s9).
+# Route to other subnets through the router so firewall rules are enforced.
 cat > /etc/netplan/99-acme-routes.yaml << 'YAML'
 network:
   version: 2
   ethernets:
-    enp0s8:
+    enp0s3:
+      dhcp4: true
+      dhcp4-overrides:
+        use-routes: false
+    enp0s9:
       routes:
         - to: 10.0.1.0/26
-          via: 10.0.1.241
+          via: 10.0.1.1
         - to: 10.0.1.128/26
-          via: 10.0.1.241
+          via: 10.0.1.1
+        - to: 10.0.2.0/24
+          via: 10.0.1.1
 YAML
 netplan apply 2>/dev/null || true
 

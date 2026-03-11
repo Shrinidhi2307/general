@@ -103,12 +103,28 @@ Vagrant.configure("2") do |config|
       vb.name = "acme-vm6-dmz"
       vb.memory = 2048
       vb.cpus = 1
+      vb.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
     end
-    # VLAN 30 — DMZ (enp0s8)
+    # VLAN 30 — DMZ (enp0s8) — internal link (kept for VLAN simulation)
     dmz.vm.network "private_network", ip: "10.0.1.242",
       netmask: "255.255.255.240",
       virtualbox__intnet: "acme-vlan30"
+    # Bridged adapter (enp0s9) — connects to physical LAN / Stockholm router.
+    # Router br-lan is 10.0.1.1/24, so VM6 at .242 is reachable on the same segment.
+    dmz.vm.network "public_network",
+      ip: "10.0.1.242",
+      netmask: "255.255.255.0"
     dmz.vm.provision "shell", path: "provision/vm6-dmz.sh"
+    # Route fix must run on every boot (not just first provision)
+    dmz.vm.provision "shell", run: "always", inline: <<-SHELL
+      if ip link show enp0s9 >/dev/null 2>&1; then
+        # Prefer bridge for router LAN traffic
+        ip route del 10.0.1.0/24 dev enp0s8 2>/dev/null || true
+        ip route del 10.0.1.240/28 dev enp0s8 2>/dev/null || true
+        ip route replace 10.0.1.0/24 dev enp0s9 src 10.0.1.242 metric 50
+        ip route add 10.0.1.240/28 dev enp0s8 src 10.0.1.242 metric 200 2>/dev/null || true
+      fi
+    SHELL
   end
 
   # ──────────────────────────────────────────────
