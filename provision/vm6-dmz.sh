@@ -2,7 +2,7 @@
 # =============================================================================
 # VM6 (DMZ) — Provisioner
 # Installs: docker, certbot, nginx
-# Configures: inter-VLAN routes through VM1, Docker Spinoff Websites, Nginx Reverse Proxy
+# Configures: inter-VLAN routes, Docker Spinoff Websites, Nginx Reverse Proxy
 # =============================================================================
 set -euo pipefail
 
@@ -14,8 +14,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     iptables iproute2 iputils-ping net-tools tcpdump curl \
     docker.io certbot nginx
 
-# ── Inter-VLAN routes via VM1 gateway ──
-# VM6 is on VLAN 30 (10.0.1.240/28). Route to other VLANs through VM1
+# ── Inter-VLAN routes via gateway ──
+# VM6 is on VLAN 30 (10.0.1.240/28). Route to other VLANs through the gateway
 # so that firewall rules are enforced (DMZ isolation).
 cat > /etc/netplan/99-acme-routes.yaml << 'YAML'
 network:

@@ -85,11 +85,11 @@ Admin: `admin` / `ACMEipa2026!`
 
 ```bash
 # DNS
-vagrant ssh vm1-gw -c 'dig +short critical.acme.internal'     # 10.0.1.2
+vagrant ssh vm2-srv -c 'dig +short critical.acme.internal'     # 10.0.1.2
 
 # mTLS
-vagrant ssh vm1-gw -c 'curl -sk https://critical.acme.internal'  # 400 (no cert)
-vagrant ssh vm1-gw -c 'curl -s --cacert /vagrant/services/certs/vm2/ca.crt \
+vagrant ssh vm2-srv -c 'curl -sk https://critical.acme.internal'  # 400 (no cert)
+vagrant ssh vm2-srv -c 'curl -s --cacert /vagrant/services/certs/vm2/ca.crt \
   --cert /vagrant/services/certs/clients/alice.crt \
   --key /vagrant/services/certs/clients/alice.key \
   https://critical.acme.internal'                               # 200
@@ -103,7 +103,7 @@ vagrant ssh vm2-srv -c 'sudo tail -1 /var/log/acme/nginx-critical.log'
 
 ## Verified ✅
 
-- DNS resolves from VM1 and VM2
+- DNS resolves from VM2
 - DNSSEC signing active
 - Syncthing container healthy
 - mTLS: no cert → 400, valid cert → 200

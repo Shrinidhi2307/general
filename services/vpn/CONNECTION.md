@@ -4,53 +4,24 @@
 
 ### Physical Topology
 
-```
-Stockholm (VM1)                          London (VM4)
-┌─────────────────┐    acme-wan (intnet)    ┌─────────────────┐
-│  10.100.0.1/30  │◄──────────────────────►│  10.100.0.2/30  │
-│    enp0s16      │   point-to-point link   │    enp0s10      │
-└────────┬────────┘                         └────────┬────────┘
-         │                                           │
-   ┌─────┴──────┐                              ┌─────┴──────┐
-   │ VLAN 10    │ 10.0.1.0/26                  │ VLAN 10    │ 10.0.2.0/26
-   │ VLAN 20    │ 10.0.1.128/26                │ VLAN 20    │ 10.0.2.128/26
-   │ VLAN 30    │ 10.0.1.240/28                └────────────┘
-   └────────────┘
-```
+The S2S VPN is now terminated on the physical routers (WireGuard). The VM-based StrongSwan
+configuration in this directory is retained for reference/reproducibility but the primary S2S
+tunnel runs between the Stockholm (DD-WRT) and London (OpenWrt) routers.
 
-In the lab, `acme-wan` is a VirtualBox internal network simulating a WAN link.
-In production this would be a public internet link or dedicated MPLS/leased line.
+London VM4 still runs StrongSwan for roadwarrior remote access.
 
-### IKEv2 Negotiation Flow
+### IKEv2 Negotiation Flow (VM4 — roadwarrior)
 
-1. **VM1 initiates** (`auto=start`) — sends IKE_SA_INIT to VM4 (`auto=add`, responder only)
+1. **Remote client initiates** — sends IKE_SA_INIT to VM4
 2. **IKE_SA_INIT exchange** — negotiates crypto (AES256-SHA256-MODP2048), exchanges DH keys
-3. **IKE_AUTH exchange** — both sides present x509 certificates signed by ACME-CA:
-   - VM1 sends `stockholm.crt` (SAN: `DNS:stockholm.acme.corp`)
-   - VM4 sends `london.crt` (SAN: `DNS:london.acme.corp`)
-   - Each side verifies the peer cert against `ca.crt` in `/etc/ipsec.d/cacerts/`
-   - Identity matching: `leftid`/`rightid` are checked against the cert's SAN field
-4. **CHILD_SA (ESP tunnel) installed** — kernel xfrm policies encrypt traffic between the declared subnets
-
-### What Gets Encrypted
-
-All traffic matching these subnet pairs goes through the ESP tunnel:
-
-| Source (leftsubnet)              | Destination (rightsubnet)        |
-|----------------------------------|----------------------------------|
-| Stockholm 10.0.1.0/26 (VLAN 10) | London 10.0.2.0/26 (VLAN 10)    |
-| Stockholm 10.0.1.128/26 (VLAN 20)| London 10.0.2.128/26 (VLAN 20) |
-| Stockholm 10.0.1.240/28 (VLAN 30)| London 10.0.2.0/26 (VLAN 10)   |
-| *(and all reverse directions)*   |                                  |
-
-Traffic between the gateways' WAN IPs (10.100.0.x) is **not** tunneled — only subnet-to-subnet traffic is.
+3. **IKE_AUTH exchange** — both sides present x509 certificates signed by ACME-CA
+4. **CHILD_SA (ESP tunnel) installed** — kernel xfrm policies encrypt traffic
 
 ### NAT Exclusion
 
-Both gateways run MASQUERADE for internet-bound traffic. Without NAT exclusion, tunnel-bound packets would be NAT'd before hitting the xfrm policy, causing a mismatch. An iptables ACCEPT rule is inserted before MASQUERADE:
+VM4 runs MASQUERADE for internet-bound traffic. Without NAT exclusion, tunnel-bound packets would be NAT'd before hitting the xfrm policy. An iptables ACCEPT rule is inserted before MASQUERADE:
 
 ```
--A POSTROUTING -s 10.0.1.0/24 -d 10.0.2.0/24 -j ACCEPT   # on VM1
 -A POSTROUTING -s 10.0.2.0/24 -d 10.0.1.0/24 -j ACCEPT   # on VM4
 ```
 
@@ -63,15 +34,15 @@ If a peer goes silent for 30s, DPD probes are sent. After 120s of no response th
 ## Setup Procedure (Lab)
 
 ```bash
-# 1. Bring up VMs (or just the two gateways)
-vagrant up vm1-gw vm4-gw
+# 1. Bring up VM4
+vagrant up vm4-gw
 
 # 2. Generate PKI (needs VM3 running)
 vagrant up vm3-ca
 bash services/vpn/setup-ca.sh
 vagrant halt vm3-ca            # air-gap it again
 
-# 3. Deploy VPN configs, certs, and bring up tunnel
+# 3. Deploy VPN configs, certs
 bash services/vpn/setup-s2s.sh
 
 # 4. Verify
@@ -84,13 +55,9 @@ bash services/vpn/test-s2s.sh
 
 | File | Deployed to | Role |
 |------|-------------|------|
-| `ipsec.conf` | VM1 `/etc/ipsec.conf` | Stockholm side — `auto=start` (initiator) |
 | `london/ipsec.conf` | VM4 `/etc/ipsec.conf` | London side — `auto=add` (responder) |
-| `ipsec.secrets` | VM1 `/etc/ipsec.secrets` | References `stockholm.key` |
 | `london/ipsec.secrets` | VM4 `/etc/ipsec.secrets` | References `london.key` |
-| `certs/ca.crt` | Both `/etc/ipsec.d/cacerts/` | Root CA certificate |
-| `certs/stockholm.crt` | VM1 `/etc/ipsec.d/certs/` | Stockholm gateway cert |
-| `certs/stockholm.key` | VM1 `/etc/ipsec.d/private/` | Stockholm private key (mode 600) |
+| `certs/ca.crt` | VM4 `/etc/ipsec.d/cacerts/` | Root CA certificate |
 | `certs/london.crt` | VM4 `/etc/ipsec.d/certs/` | London gateway cert |
 | `certs/london.key` | VM4 `/etc/ipsec.d/private/` | London private key (mode 600) |
 
@@ -100,33 +67,17 @@ bash services/vpn/test-s2s.sh
 
 ### 1. WAN Addresses
 
-Replace the VirtualBox internal network IPs with real public IPs or routable addresses:
-
-```diff
- # ipsec.conf (Stockholm)
--left=10.100.0.1
-+left=<stockholm-public-ip>
--right=10.100.0.2
-+right=<london-public-ip>
-
- # london/ipsec.conf
--left=10.100.0.2
-+left=<london-public-ip>
--right=10.100.0.1
-+right=<stockholm-public-ip>
-```
-
+Replace the VirtualBox internal network IPs with real public IPs or routable addresses.
 If either side is behind NAT, add `leftfirewall=yes` and consider using `%any` for the NATed side's `right=` value, or enable NAT-T (`forceencaps=yes`).
 
 ### 2. Certificates
 
 Replace lab certs with certs from your real PKI or a commercial CA:
 
-- Regenerate with proper FQDNs matching your DNS (e.g., `vpn-gw.stockholm.acme.com`)
+- Regenerate with proper FQDNs matching your DNS
 - Use a longer key (4096-bit RSA or ECDSA P-384/P-521)
 - Set proper certificate lifetimes and plan for renewal
 - Update `leftid`/`rightid` to match the new certificate SANs
-- Update `rightca` if the CA DN changes
 
 ### 3. Crypto Parameters
 
@@ -144,15 +95,7 @@ esp=aes256gcm16-sha384!
 
 ### 4. Subnets
 
-Update `leftsubnet` and `rightsubnet` to match your actual site networks:
-
-```diff
- # ipsec.conf (Stockholm)
--leftsubnet=10.0.1.0/26,10.0.1.128/26,10.0.1.240/28
-+leftsubnet=<stockholm-server-net>,<stockholm-client-net>,<stockholm-dmz-net>
--rightsubnet=10.0.2.0/26,10.0.2.128/26
-+rightsubnet=<london-server-net>,<london-client-net>
-```
+Update `leftsubnet` and `rightsubnet` to match your actual site networks.
 
 ### 5. Debug Logging
 
@@ -168,13 +111,9 @@ Turn down debug verbosity — the lab config is verbose for troubleshooting:
 
 Update the iptables rules and `before.rules` entries to match your real subnets. If you're not running NAT on the gateways (e.g., using proper routing), you can remove the NAT exclusion entirely.
 
-### 7. WAN Interface Detection
+### 7. Firewall
 
-The lab's auto-detection logic in `setup-s2s.sh` (find unconfigured interface) is a lab convenience. In production, configure the WAN interface explicitly via netplan/networkd with a known interface name.
-
-### 8. Firewall
-
-The lab disables suricata/fail2ban for simplicity. In production:
+In production:
 - Allow UDP 500 (IKE) and UDP 4500 (NAT-T) on WAN-facing interfaces
 - Allow ESP (protocol 50) if not using NAT-T
 - Keep suricata/fail2ban enabled and tuned for your traffic

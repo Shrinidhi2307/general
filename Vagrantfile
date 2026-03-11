@@ -3,14 +3,16 @@
 # =============================================================================
 # ACME Multi-Site Network — VirtualBox VMs via Vagrant
 # =============================================================================
-# Creates Stockholm: VM1 (Gateway), VM2 (Server), VM3 (CA), VM6 (DMZ)
+# Creates Stockholm: VM2 (Server), VM3 (CA), VM6 (DMZ)
 #         London:    VM4 (Gateway), VM5 (RADIUS Proxy)
+#
+# The host PC (10.0.1.24) bridges to VM2 for Stockholm network access.
 #
 # USAGE:
 #   brew install --cask virtualbox vagrant
 #   vagrant up                    # All VMs
 #   vagrant up vm4-gw vm5-radius  # London only
-#   vagrant ssh vm1-gw
+#   vagrant ssh vm2-srv
 #
 # NETWORKING:
 #   Each VM gets a Vagrant NAT adapter (enp0s3) for management/provisioning.
@@ -18,17 +20,10 @@
 #
 #   Stockholm:
 #     acme-vlan10  — Server VLAN (10.0.1.0/26)
-#     acme-vlan20  — Client VLAN (10.0.1.128/26)
 #     acme-vlan30  — DMZ VLAN   (10.0.1.240/28)
 #
 #   London:
 #     london-vlan10 — Server VLAN (10.0.2.0/26)
-#     london-vlan20 — Client VLAN (10.0.2.128/26)
-#
-#   WAN:
-#     acme-wan    — Point-to-point link between VM1 and VM4 (10.100.0.0/30)
-#
-#   IPsec S2S tunnel runs over the acme-wan link.
 # =============================================================================
 
 Vagrant.configure("2") do |config|
@@ -49,8 +44,8 @@ Vagrant.configure("2") do |config|
       netmask: "255.255.255.192",
       virtualbox__intnet: "acme-vlan10"
     # Bridged adapter (enp0s9) — connects to physical LAN / OpenWrt router.
-    # Vagrant will prompt to select the host adapter; pick the USB-to-Ethernet
-    # or wired NIC that is plugged into the router's LAN port.
+    # Vagrant will prompt to select the host adapter; pick the NIC that is
+    # plugged into the router's LAN port.
     srv.vm.network "public_network",
       ip: "10.0.1.50",
       netmask: "255.255.255.192"

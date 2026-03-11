@@ -8,7 +8,7 @@
 # This script:
 #   1. Initialises EasyRSA PKI on VM3
 #   2. Builds a root CA (ACME-CA)
-#   3. Generates & signs certs for Stockholm (VM1) and London gateways
+#   3. Generates & signs certs for Stockholm and London gateways
 #   4. Exports certs + keys to /vagrant/services/vpn/certs/ (shared folder)
 # =============================================================================
 set -euo pipefail

@@ -56,11 +56,6 @@ check_ping vm6-dmz 10.0.1.2 FAIL "VM6 (DMZ) cannot reach VM2 (Server VLAN)"
 check_ping vm6-dmz 10.0.1.3 FAIL "VM6 (DMZ) cannot reach VM3 (CA Server)"
 
 echo ""
-echo "--- 4. Testing Internal Base Connectivity ---"
-check_ping vm2-srv 10.0.1.1 SUCCESS "VM2 (Server) can reach Gateway"
-check_ping vm3-ca 10.0.1.1 SUCCESS "VM3 (CA) can reach Gateway"
-
-echo ""
 echo "=========================================================="
 echo " Results: $PASS passed, $FAIL failed"
 echo " Note: Port-specific tests (VLAN 20 to VLAN 10 on port 443/53)"

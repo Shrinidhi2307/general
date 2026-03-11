@@ -18,15 +18,11 @@ run_on() {
     vagrant ssh "$vm" -c "sudo $*"
 }
 
-for vm in vm1-gw vm2-srv vm3-ca vm6-dmz; do
+for vm in vm2-srv vm3-ca vm6-dmz; do
     echo ">>> Resetting $vm..."
     run_on "$vm" "ufw --force reset"
     run_on "$vm" "ufw --force disable"
 done
-
-# Flush iptables FORWARD chain on Stockholm gateway
-run_on vm1-gw "iptables -F FORWARD"
-run_on vm1-gw "iptables -P FORWARD ACCEPT"
 
 echo "====================================================="
 echo " Stockholm UFW rules reset. Firewalls are disabled."

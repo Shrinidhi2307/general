@@ -1,43 +1,42 @@
 # ACME Corp — Multi-Site Network
 
-KTH networks course project. Multi-site corporate network built with Vagrant/VirtualBox VMs.
+KTH networks course project. Multi-site corporate network built with OpenWrt routers and Vagrant/VirtualBox VMs.
 
-Stockholm runs 4 VMs (VM1, VM2, VM3, VM6). London runs 2 VMs (VM4, VM5). Both sites are in a single Vagrantfile and connected via IPsec VPN.
+Stockholm runs 3 VMs (VM2, VM3, VM6) behind an OpenWrt router. London runs 2 VMs (VM4, VM5) behind an OpenWrt router. The routers handle site-to-site WireGuard VPN, WiFi, and firewall. VMs provide application services.
 
 ## Network Topology
 
 ```
-             Internet                              Internet
-                │                                     │
-          ┌─────┴──────┐                        ┌─────┴──────┐
-          │   VM1-GW   │  enp0s3: NAT           │   VM4-GW   │  enp0s3: NAT
-          │  Stockholm  │  enp0s8: 10.0.1.1/26   │   London   │  enp0s8: 10.0.2.1/26
-          │   Gateway   │  enp0s9: 10.0.1.129/26 │   Gateway   │  enp0s9: 10.0.2.129/26
-          │            │  enp0s10: 10.0.1.241/28 │            │
-          └──┬───┬──┬──┘                        └──┬───┬─────┘
-             │   │  │    ── IPsec S2S tunnel ──    │   │
-    ┌────────┘   │  └────────┐            ┌────────┘   │
-    │            │           │            │            │
- VLAN 10     VLAN 20     VLAN 30       VLAN 10     VLAN 20
-10.0.1.0/26  10.0.1.128/26  10.0.1.240/28  10.0.2.0/26  10.0.2.128/26
-(Server/CA)  (Client)      (DMZ)        (RADIUS)    (Client)
-    │                        │            │
- ┌──┴───┐               ┌───┴───┐     ┌──┴─────┐
- │VM2   │ 10.0.1.2      │VM6    │     │VM5     │ 10.0.2.2
- │Server│ Nginx, BIND9,  │DMZ    │     │RADIUS  │ FreeRADIUS
- │      │ Syncthing      │       │     │Proxy   │ (proxy to VM3)
- ├──────┤               └───────┘     └────────┘
- │VM3   │ 10.0.1.3
- │CA    │ FreeRADIUS, EasyRSA
- │      │ (air-gapped)
- └──────┘
+                        WireGuard S2S
+  Stockholm Router ◄──────────────────────► London Router
+  (OpenWrt)                                  (OpenWrt)
+  WAN: 130.237.11.42                         WAN: DHCP
+  wg0: 10.0.3.1                              wg0: 10.0.3.2
+       │                                          │
+  ┌────┴──────────────────────┐             ┌─────┴──────────────┐
+  │         │         │       │             │         │          │
+ LAN    Employee   Guest    DMZ            LAN    Employee    Guest
+10.0.1.0  10.0.1.128 10.0.4.0 10.0.1.240  10.0.2.0  10.0.2.0  10.0.4.0
+ /24       /25        /24      /28          /24       /24        /24
+  │                             │             │
+  │  ┌──────┐                   │          ┌──┴─────┐
+  ├──│VM2   │ .2                │          │VM5     │ .2
+  │  │Server│ Nginx, BIND9,     │          │RADIUS  │ FreeRADIUS
+  │  │      │ Syncthing         │          │Proxy   │ (proxy→VM3)
+  │  ├──────┤               ┌───┴───┐      └────────┘
+  │  │VM3   │ .3            │VM6    │ .242
+  │  │CA    │ FreeRADIUS,   │DMZ    │ Docker, Nginx,
+  │  │      │ EasyRSA       │       │ Certbot
+  │  └──────┘               └───────┘
+  │
+  ├── Host PC 10.0.1.24 (bridged to VM2 via enp0s9)
 ```
 
 ## Prerequisites
 
 - [VirtualBox](https://www.virtualbox.org/) 7.x
 - [Vagrant](https://www.vagrantup.com/) 2.4+
-- **32 GB RAM** recommended for all 6 VMs (16 GB is fine for one site at a time)
+- **32 GB RAM** recommended
 - ~50 GB disk available
 
 ### macOS
@@ -62,13 +61,12 @@ sudo apt-get install -y virtualbox vagrant
 ## Quick Start
 
 ```bash
-# Bring up everything.
-# !!WARNING TAKES 18> GB OF RAM!!
+# Bring up everything
 vagrant up
 
 # Or just one site
-vagrant up vm1-gw vm2-srv vm3-ca vm6-dmz    # Stockholm
-vagrant up vm4-gw vm5-radius                 # London
+vagrant up vm2-srv vm3-ca vm6-dmz         # Stockholm
+vagrant up vm5-radius                      # London
 
 # Configure firewalls
 bash configure-ufw-stockholm.sh
@@ -83,11 +81,11 @@ bash test-firewall-london.sh
 
 ### Running Individual VMs
 
-You don't have to bring up everything at once. On a 16 GB machine, bring up only the VMs you need. Note that inter-VLAN routing requires the site's gateway (VM1 or VM4) to be running.
+You don't have to bring up everything at once.
 
 ```bash
-vagrant up vm1-gw            # Start only the Stockholm gateway
-vagrant up vm4-gw vm5-radius # Start London
+vagrant up vm2-srv           # Start only the Stockholm server
+vagrant up vm5-radius        # Start London RADIUS
 vagrant halt vm3-ca          # Stop one VM
 vagrant destroy vm6-dmz -f   # Destroy and recreate just the DMZ
 vagrant provision vm2-srv    # Re-run the provisioner on one VM
@@ -97,25 +95,23 @@ vagrant provision vm2-srv    # Re-run the provisioner on one VM
 
 ### Stockholm
 
-| VM  | Hostname | VLAN       | IP                   | Key Services                                  |
-| --- | -------- | ---------- | -------------------- | --------------------------------------------- |
-| VM1 | vm1-gw   | 10, 20, 30 | 10.0.1.1, .129, .241 | Suricata IDS, Fail2ban, NAT |
-| VM2 | vm2-srv  | 10         | 10.0.1.2             | Nginx, BIND9, Docker, Syncthing               |
-| VM3 | vm3-ca   | 10         | 10.0.1.3             | FreeRADIUS, Easy-RSA (air-gapped)             |
-| VM6 | vm6-dmz  | 30         | 10.0.1.242           | Docker, Nginx, Certbot                        |
+| VM  | Hostname | Subnet | IP         | Key Services                      |
+| --- | -------- | ------ | ---------- | --------------------------------- |
+| VM2 | vm2-srv  | LAN    | 10.0.1.2   | Nginx, BIND9, Docker, Syncthing   |
+| VM3 | vm3-ca   | LAN    | 10.0.1.3   | FreeRADIUS, Easy-RSA (air-gapped) |
+| VM6 | vm6-dmz  | DMZ    | 10.0.1.242 | Docker, Nginx, Certbot            |
 
 ### London
 
-| VM  | Hostname   | VLAN   | IP             | Key Services                                           |
-| --- | ---------- | ------ | -------------- | ------------------------------------------------------ |
-| VM4 | vm4-gw     | 10, 20 | 10.0.2.1, .129 | StrongSwan IPsec, OpenVPN, Suricata IDS, Fail2ban, NAT |
-| VM5 | vm5-radius | 10     | 10.0.2.2       | FreeRADIUS (proxy to VM3 via IPsec)                    |
+| VM  | Hostname   | Subnet | IP       | Key Services                            |
+| --- | ---------- | ------ | -------- | --------------------------------------- |
+| VM4 | vm4-gw     | LAN    | 10.0.2.1 | OpenVPN, Suricata IDS, Fail2ban, NAT    |
+| VM5 | vm5-radius | LAN    | 10.0.2.2 | FreeRADIUS (proxy to VM3 via WireGuard) |
 
 ## SSH Access
 
 ```bash
 # Stockholm
-vagrant ssh vm1-gw
 vagrant ssh vm2-srv
 vagrant ssh vm3-ca
 vagrant ssh vm6-dmz
@@ -140,25 +136,23 @@ vagrant ssh vm5-radius
 
 All VMs have a Vagrant NAT adapter (`enp0s3`) for management. VLAN interfaces:
 
-| VM  | enp0s8               | enp0s9               | enp0s10              |
-| --- | -------------------- | -------------------- | -------------------- |
-| VM1 | VLAN 10 (10.0.1.1)   | VLAN 20 (10.0.1.129) | VLAN 30 (10.0.1.241) |
-| VM2 | VLAN 10 (10.0.1.2)   | —                    | —                    |
-| VM3 | VLAN 10 (10.0.1.3)   | —                    | —                    |
-| VM6 | VLAN 30 (10.0.1.242) | —                    | —                    |
-| VM4 | VLAN 10 (10.0.2.1)   | VLAN 20 (10.0.2.129) | —                    |
-| VM5 | VLAN 10 (10.0.2.2)   | —                    | —                    |
+| VM  | enp0s8               | enp0s9              |
+| --- | -------------------- | ------------------- |
+| VM2 | VLAN 10 (10.0.1.2)   | Bridged (10.0.1.50) |
+| VM3 | VLAN 10 (10.0.1.3)   | —                   |
+| VM6 | VLAN 30 (10.0.1.242) | —                   |
+| VM4 | LAN (10.0.2.1)       | —                   |
+| VM5 | LAN (10.0.2.2)       | —                   |
 
 ## Firewall Policy Summary
 
-**VM1 (Stockholm Gateway):**
+### Router Firewalls (OpenWrt)
 
-- Default deny incoming/routed, allow outgoing
-- NAT masquerade for 10.0.1.0/24 outbound on enp0s3
-- DMZ blocked from Server and Client VLANs (deny before allow)
-- VLANs 10/20/30 allowed outbound to internet
-- Internet inbound to DMZ on ports 80/443 only
-- VLAN 20 → VLAN 10 restricted to ports 443, 8384, 53 (not VM3)
+**Stockholm Router:** default REJECT input/forward, ACCEPT output. Zones: lan, wan (masq), employee, guest (fwd REJECT), vpn (no masq). VPN→Critical (10.0.1.2) blocked.
+
+**London Router:** default REJECT input/forward, ACCEPT output. Zones: lan, wan (masq), employee, guest (fwd ACCEPT, masq), vpn (masq).
+
+### VM Firewalls (UFW)
 
 **VM2 (Server):** deny incoming except SSH, HTTP/S, DNS, Syncthing (8384, 22000)
 
@@ -166,13 +160,7 @@ All VMs have a Vagrant NAT adapter (`enp0s3`) for management. VLAN interfaces:
 
 **VM6 (DMZ):** deny incoming except SSH, HTTP/S
 
-**VM4 (London Gateway):**
-
-- Default deny incoming/routed, allow outgoing
-- NAT masquerade for 10.0.2.0/24 outbound on enp0s3
-- IPsec (UDP 500/4500, ESP) and OpenVPN (UDP 1194) allowed
-- London VLANs 10/20 allowed outbound to internet
-- VLAN 20 → VLAN 10 restricted to ports 443, 8384, 53, RADIUS (1812-1813)
+**VM4 (London Gateway):** default deny incoming/routed, allow outgoing. OpenVPN (UDP 1194) allowed. NAT masquerade for LAN outbound.
 
 **VM5 (RADIUS Proxy):** deny incoming except SSH, RADIUS (1812-1813/udp)
 
@@ -183,8 +171,6 @@ vagrant status              # Show state of all VMs
 vagrant up                  # Create/start all VMs
 vagrant halt                # Stop all VMs (preserves disk)
 vagrant destroy -f          # Delete all VMs and their disks
-vagrant snapshot save vm1-gw clean-baseline
-vagrant snapshot restore vm1-gw clean-baseline
 ```
 
 ## Known Issues

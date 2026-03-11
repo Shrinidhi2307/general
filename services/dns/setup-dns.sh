@@ -116,7 +116,6 @@ cat > "${ZONE_DIR}/db.acme.internal" << ZONE_EOF
 @       IN NS  vm2.acme.internal.
 
 ; Stockholm hosts
-vm1     IN A   10.0.1.1
 vm2     IN A   10.0.1.2
 vm3     IN A   10.0.1.3
 vm6     IN A   10.0.1.242
@@ -145,7 +144,6 @@ cat > "${ZONE_DIR}/db.10.0.1" << REV_EOF
 
 @   IN NS  vm2.acme.internal.
 
-1   IN PTR vm1.acme.internal.
 2   IN PTR vm2.acme.internal.
 3   IN PTR vm3.acme.internal.
 242 IN PTR vm6.acme.internal.
