@@ -27,25 +27,29 @@ if ip link show enp0s9 >/dev/null 2>&1; then
     ip route add 10.0.1.128/26 via 10.0.1.1 dev enp0s9 2>/dev/null || true
 fi
 
-echo ">>> 1. Importing Certificates from VM3..."
+echo ">>> 1. Importing certificates..."
 mkdir -p /etc/nginx/ssl
 
-# Copy certs if present; do not fail hard if VM3/shared_certs is not ready yet
+# Optional CA cert
 if [ -f /vagrant/shared_certs/ca.crt ]; then
-    cp /vagrant/shared_certs/ca.crt /etc/nginx/ssl/
+    cp /vagrant/shared_certs/ca.crt /etc/nginx/ssl/ca.crt
 fi
 
-if [ -f /vagrant/shared_certs/vm2-srv.crt ] && [ -f /vagrant/shared_certs/vm2-srv.key ]; then
-    cp /vagrant/shared_certs/vm2-srv.crt /etc/nginx/ssl/
-    cp /vagrant/shared_certs/vm2-srv.key /etc/nginx/ssl/
-    chmod 600 /etc/nginx/ssl/*.key
+# Prefer externally supplied web certs
+if [ -f /vagrant/shared_certs/acme-web.crt ] && [ -f /vagrant/shared_certs/acme-web.key ]; then
+    cp /vagrant/shared_certs/acme-web.crt /etc/nginx/ssl/acme-web.crt
+    cp /vagrant/shared_certs/acme-web.key /etc/nginx/ssl/acme-web.key
+    chmod 644 /etc/nginx/ssl/acme-web.crt
+    chmod 600 /etc/nginx/ssl/acme-web.key
 else
-    echo ">>> VM3 certs not found, generating temporary self-signed cert for VM2..."
+    echo ">>> Web certs not found, generating temporary self-signed cert..."
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout /etc/nginx/ssl/vm2-srv.key \
-        -out /etc/nginx/ssl/vm2-srv.crt \
-        -subj "/C=SE/ST=Stockholm/L=Stockholm/O=ACME/OU=IT/CN=secure.acme.com" >/dev/null 2>&1
-    chmod 600 /etc/nginx/ssl/vm2-srv.key
+        -keyout /etc/nginx/ssl/acme-web.key \
+        -out /etc/nginx/ssl/acme-web.crt \
+        -subj "/C=SE/ST=Stockholm/L=Stockholm/O=ACME/OU=IT/CN=10.0.1.50" \
+        >/dev/null 2>&1
+    chmod 644 /etc/nginx/ssl/acme-web.crt
+    chmod 600 /etc/nginx/ssl/acme-web.key
 fi
 
 echo ">>> 2. Configuring BIND9 (Internal DNS)..."
@@ -60,7 +64,7 @@ mkdir -p /etc/bind/zones
 cat > /etc/bind/zones/db.acme.com << 'EOF'
 $TTL    604800
 @       IN      SOA     ns1.acme.com. admin.acme.com. (
-                              3         ; Serial
+                              4         ; Serial
                          604800         ; Refresh
                           86400         ; Retry
                         2419200         ; Expire
@@ -75,13 +79,23 @@ systemctl restart named
 systemctl enable named
 
 echo ">>> 3. Configuring Nginx (Internal HTTPS Web Server)..."
+mkdir -p /var/www/html/secure
+
 cat > /etc/nginx/sites-available/secure_site << 'EOF'
 server {
+    listen 80;
+    listen [::]:80;
+    server_name secure.acme.com 10.0.1.50 _;
+    return 301 https://$host$request_uri;
+}
+
+server {
     listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
     server_name secure.acme.com 10.0.1.50 _;
 
-    ssl_certificate /etc/nginx/ssl/vm2-srv.crt;
-    ssl_certificate_key /etc/nginx/ssl/vm2-srv.key;
+    ssl_certificate /etc/nginx/ssl/acme-web.crt;
+    ssl_certificate_key /etc/nginx/ssl/acme-web.key;
 
     # Demo phase: normal HTTPS only.
     # Access control should be enforced later by router/VPN/firewall rules.
@@ -94,18 +108,144 @@ server {
 }
 EOF
 
-mkdir -p /var/www/html/secure
 cat > /var/www/html/secure/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ACME Secure Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACME Secure Internal Portal</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f7fb;
+            color: #1f2937;
+        }
+        .container {
+            max-width: 920px;
+            margin: 60px auto;
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 18px;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
+        }
+        .badge {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: #dcfce7;
+            color: #166534;
+            font-weight: bold;
+            margin-bottom: 18px;
+        }
+        h1 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 34px;
+            color: #0f172a;
+        }
+        .subtitle {
+            font-size: 18px;
+            color: #475569;
+            margin-bottom: 28px;
+        }
+        .section {
+            margin-top: 28px;
+        }
+        .section h2 {
+            margin-bottom: 10px;
+            font-size: 20px;
+            color: #1d4ed8;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-top: 14px;
+        }
+        .card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 18px;
+        }
+        ul {
+            padding-left: 20px;
+            margin: 10px 0 0 0;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        code {
+            background: #eef2ff;
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+        .footer {
+            margin-top: 36px;
+            font-size: 14px;
+            color: #64748b;
+        }
+        @media (max-width: 700px) {
+            .container {
+                margin: 20px;
+                padding: 24px;
+            }
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>Welcome to ACME Secure Internal Portal</h1>
-    <p>This VM2-hosted internal site is ready for testing.</p>
-    <p>In the final setup, access should only be allowed from Employee networks or via VPN.</p>
+    <div class="container">
+        <div class="badge">Internal Service Active</div>
+        <h1>ACME Secure Internal Portal</h1>
+        <p class="subtitle">
+            Protected internal HTTPS service hosted on VM2 in the Stockholm office network.
+        </p>
+
+        <div class="section">
+            <h2>Overview</h2>
+            <p>
+                This portal demonstrates ACME’s internal web service architecture for secure access to company resources.
+                In the finalized setup, access should be limited to authorized employee networks or through the secure remote access solution.
+            </p>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Security Features</h2>
+                <ul>
+                    <li>HTTPS-enabled internal web server</li>
+                    <li>Certificate-based trust model using internal CA</li>
+                    <li>Internal DNS record for the secure service</li>
+                    <li>Segregated internal network design</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h2>Service Information</h2>
+                <p><strong>Server:</strong> VM2 (Stockholm Server)</p>
+                <p><strong>Web stack:</strong> Nginx over TLS</p>
+                <p><strong>Address:</strong> <code>10.0.1.50</code></p>
+                <p><strong>Hostname:</strong> <code>secure.acme.com</code></p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Project Context</h2>
+            <p>
+                This page is part of the EP2520 ACME network security demonstration environment.
+                It is used to verify secure internal service delivery, certificate deployment, and protected access design.
+            </p>
+        </div>
+
+        <div class="footer">
+            ACME Scandinavia — Internal demonstration portal
+        </div>
+    </div>
 </body>
 </html>
 EOF
