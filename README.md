@@ -29,7 +29,7 @@ Stockholm runs 3 VMs (VM2, VM3, VM6) behind an OpenWrt router. London runs 2 VMs
   │  │      │ EasyRSA       │       │ Certbot
   │  └──────┘               └───────┘
   │
-  ├── Host PC 10.0.1.24 (bridged to VM2 via enp0s9)
+  ├── Host PC 10.0.1.31 (bridged to VM2 via enp0s9)
 ```
 
 ## Prerequisites
