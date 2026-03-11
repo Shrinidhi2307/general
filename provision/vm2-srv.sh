@@ -13,40 +13,57 @@ apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     iptables iproute2 iputils-ping net-tools tcpdump curl dnsutils \
     nginx bind9 bind9utils \
-    docker.io python3-pip python3-venv
+    docker.io python3-pip python3-venv openssl
 
 # ── Route fix: prefer bridged adapter (enp0s9) for the physical LAN ──
-# Both enp0s8 (intnet) and enp0s9 (bridged) share 10.0.1.0/26. Without this fix,
-# enp0s8 wins and traffic to the router goes into the VirtualBox internal network.
 if ip link show enp0s9 >/dev/null 2>&1; then
     ip route del 10.0.1.0/26 dev enp0s8 2>/dev/null || true
     ip route replace 10.0.1.0/26 dev enp0s9 src 10.0.1.50 metric 50
-    # Re-add enp0s8 route with higher metric so VM3 is still reachable via intnet
     ip route add 10.0.1.0/26 dev enp0s8 src 10.0.1.2 metric 200 2>/dev/null || true
-    # Route to Employee/Client subnet via the router
     ip route add 10.0.1.128/26 via 10.0.1.1 dev enp0s9 2>/dev/null || true
 fi
 
-echo ">>> 1. Importing certificates..."
+echo ">>> 1. Importing certificates from VM3 CA..."
 mkdir -p /etc/nginx/ssl
 
-# Optional CA cert
-if [ -f /vagrant/shared_certs/ca.crt ]; then
-    cp /vagrant/shared_certs/ca.crt /etc/nginx/ssl/ca.crt
-fi
+# Prefer CA-issued server certs from VM3
+if [ -f /vagrant/shared_certs/issued/vm2-srv/vm2-srv.crt ] && \
+   [ -f /vagrant/shared_certs/issued/vm2-srv/vm2-srv.key ]; then
 
-# Prefer externally supplied web certs
-if [ -f /vagrant/shared_certs/acme-web.crt ] && [ -f /vagrant/shared_certs/acme-web.key ]; then
-    cp /vagrant/shared_certs/acme-web.crt /etc/nginx/ssl/acme-web.crt
-    cp /vagrant/shared_certs/acme-web.key /etc/nginx/ssl/acme-web.key
+    cp /vagrant/shared_certs/issued/vm2-srv/vm2-srv.crt /etc/nginx/ssl/acme-web.crt
+    cp /vagrant/shared_certs/issued/vm2-srv/vm2-srv.key /etc/nginx/ssl/acme-web.key
+
+    if [ -f /vagrant/shared_certs/issued/vm2-srv/ca.crt ]; then
+        cp /vagrant/shared_certs/issued/vm2-srv/ca.crt /etc/nginx/ssl/ca.crt
+    fi
+
     chmod 644 /etc/nginx/ssl/acme-web.crt
     chmod 600 /etc/nginx/ssl/acme-web.key
+    [ -f /etc/nginx/ssl/ca.crt ] && chmod 644 /etc/nginx/ssl/ca.crt
+
+    echo ">>> Imported CA-issued TLS certificate for VM2."
+
+# Fallback to legacy shared cert path if present
+elif [ -f /vagrant/shared_certs/acme-web.crt ] && [ -f /vagrant/shared_certs/acme-web.key ]; then
+    cp /vagrant/shared_certs/acme-web.crt /etc/nginx/ssl/acme-web.crt
+    cp /vagrant/shared_certs/acme-web.key /etc/nginx/ssl/acme-web.key
+
+    if [ -f /vagrant/shared_certs/ca.crt ]; then
+        cp /vagrant/shared_certs/ca.crt /etc/nginx/ssl/ca.crt
+        chmod 644 /etc/nginx/ssl/ca.crt
+    fi
+
+    chmod 644 /etc/nginx/ssl/acme-web.crt
+    chmod 600 /etc/nginx/ssl/acme-web.key
+    echo ">>> Imported legacy shared TLS certificate."
+
 else
-    echo ">>> Web certs not found, generating temporary self-signed cert..."
+    echo ">>> No CA-issued web cert found, generating temporary self-signed cert..."
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
         -keyout /etc/nginx/ssl/acme-web.key \
         -out /etc/nginx/ssl/acme-web.crt \
-        -subj "/C=SE/ST=Stockholm/L=Stockholm/O=ACME/OU=IT/CN=10.0.1.50" \
+        -subj "/C=SE/ST=Stockholm/L=Stockholm/O=ACME/OU=IT/CN=secure.acme.com" \
+        -addext "subjectAltName=DNS:secure.acme.com,IP:10.0.1.50" \
         >/dev/null 2>&1
     chmod 644 /etc/nginx/ssl/acme-web.crt
     chmod 600 /etc/nginx/ssl/acme-web.key
@@ -64,7 +81,7 @@ mkdir -p /etc/bind/zones
 cat > /etc/bind/zones/db.acme.com << 'EOF'
 $TTL    604800
 @       IN      SOA     ns1.acme.com. admin.acme.com. (
-                              4         ; Serial
+                              5         ; Serial
                          604800         ; Refresh
                           86400         ; Retry
                         2419200         ; Expire
@@ -75,6 +92,8 @@ ns1     IN      A       10.0.1.50
 secure  IN      A       10.0.1.50
 EOF
 
+named-checkconf
+named-checkzone acme.com /etc/bind/zones/db.acme.com
 systemctl restart named
 systemctl enable named
 
@@ -85,20 +104,20 @@ cat > /etc/nginx/sites-available/secure_site << 'EOF'
 server {
     listen 80;
     listen [::]:80;
-    server_name secure.acme.com 10.0.1.50 _;
+    server_name secure.acme.com 10.0.1.50;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl default_server;
     listen [::]:443 ssl default_server;
-    server_name secure.acme.com 10.0.1.50 _;
+    server_name secure.acme.com 10.0.1.50;
 
     ssl_certificate /etc/nginx/ssl/acme-web.crt;
     ssl_certificate_key /etc/nginx/ssl/acme-web.key;
 
-    # Demo phase: normal HTTPS only.
-    # Access control should be enforced later by router/VPN/firewall rules.
+    # Optional: publish CA chain location if needed later
+    # ssl_client_certificate /etc/nginx/ssl/ca.crt;
     ssl_verify_client off;
 
     location / {
