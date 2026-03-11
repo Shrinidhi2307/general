@@ -81,7 +81,7 @@ install_repo_cert() {
     local le_dir="/etc/letsencrypt/live/${domain}"
 
     if [ ! -f "${le_dir}/fullchain.pem" ] && [ -f "$repo_cert" ] && [ -f "$repo_key" ]; then
-        echo ">>> Installing bundled Let's Encrypt cert for ${domain} from repo..."
+        echo ">>> Installing bundled Let's Encrypt cert for ${domain} from repo..." >&2
         mkdir -p "$le_dir"
         cp "$repo_cert" "${le_dir}/fullchain.pem"
         cp "$repo_key"  "${le_dir}/privkey.pem"
