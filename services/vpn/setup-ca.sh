@@ -8,15 +8,14 @@
 # This script:
 #   1. Initialises EasyRSA PKI on VM3
 #   2. Builds a root CA (ACME-CA)
-#   3. Generates & signs certs for Stockholm and London gateways
-#   4. Exports certs + keys to /vagrant/services/vpn/certs/ (shared folder)
+#   3. Exports CA cert to /vagrant/services/vpn/certs/ (shared folder)
 # =============================================================================
 set -euo pipefail
 
 CERT_DIR="services/vpn/certs"
 
 echo "====================================================="
-echo " Setting up PKI on VM3 (CA) for IPsec"
+echo " Setting up PKI on VM3 (CA)"
 echo "====================================================="
 
 # Create local cert output directory
@@ -52,55 +51,20 @@ else
     echo ">>> CA already exists, skipping..."
 fi
 
-# ── Generate & Sign Stockholm Gateway Cert ──
-# NOTE: --subject-alt-name adds a SAN entry so StrongSwan can match
-#       leftid=@stockholm.acme.corp against the certificate.
-if [ ! -f "$PKI_DIR/issued/stockholm.crt" ]; then
-    echo ">>> Generating Stockholm gateway certificate..."
-    EASYRSA_BATCH=1 EASYRSA_REQ_CN="stockholm.acme.corp" \
-        ./easyrsa --subject-alt-name="DNS:stockholm.acme.corp" gen-req stockholm nopass
-    EASYRSA_BATCH=1 \
-        ./easyrsa --subject-alt-name="DNS:stockholm.acme.corp" sign-req server stockholm
-else
-    echo ">>> Stockholm cert already exists, skipping..."
-fi
-
-# ── Generate & Sign London Gateway Cert ──
-if [ ! -f "$PKI_DIR/issued/london.crt" ]; then
-    echo ">>> Generating London gateway certificate..."
-    EASYRSA_BATCH=1 EASYRSA_REQ_CN="london.acme.corp" \
-        ./easyrsa --subject-alt-name="DNS:london.acme.corp" gen-req london nopass
-    EASYRSA_BATCH=1 \
-        ./easyrsa --subject-alt-name="DNS:london.acme.corp" sign-req server london
-else
-    echo ">>> London cert already exists, skipping..."
-fi
-
-# ── Export Certificates and Keys ──
-echo ">>> Exporting certificates to shared folder..."
+# ── Export CA Certificate ──
+echo ">>> Exporting CA certificate to shared folder..."
 mkdir -p "$EXPORT_DIR"
 
-cp "$PKI_DIR/ca.crt"                "$EXPORT_DIR/ca.crt"
-cp "$PKI_DIR/issued/stockholm.crt"  "$EXPORT_DIR/stockholm.crt"
-cp "$PKI_DIR/private/stockholm.key" "$EXPORT_DIR/stockholm.key"
-cp "$PKI_DIR/issued/london.crt"     "$EXPORT_DIR/london.crt"
-cp "$PKI_DIR/private/london.key"    "$EXPORT_DIR/london.key"
+cp "$PKI_DIR/ca.crt" "$EXPORT_DIR/ca.crt"
+chmod 644 "$EXPORT_DIR/ca.crt"
 
-chmod 644 "$EXPORT_DIR"/*.crt
-chmod 600 "$EXPORT_DIR"/*.key
-
-echo ">>> PKI setup complete. Certificates exported to $EXPORT_DIR"
-ls -la "$EXPORT_DIR"
+echo ">>> PKI setup complete. CA certificate exported to $EXPORT_DIR"
+ls -la "$EXPORT_DIR/ca.crt"
 
 CA_EOF
 
 echo ""
 echo "====================================================="
 echo " CA Setup Complete!"
-echo " Certificates are in: $CERT_DIR/"
-echo "   ca.crt          — Root CA certificate"
-echo "   stockholm.crt   — Stockholm gateway certificate"
-echo "   stockholm.key   — Stockholm gateway private key"
-echo "   london.crt      — London gateway certificate"
-echo "   london.key      — London gateway private key"
+echo " CA certificate is in: $CERT_DIR/ca.crt"
 echo "====================================================="

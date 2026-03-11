@@ -2,7 +2,7 @@
 
 KTH networks course project. Multi-site corporate network built with OpenWrt routers and Vagrant/VirtualBox VMs.
 
-Stockholm runs 3 VMs (VM2, VM3, VM6) behind an OpenWrt router. London runs 2 VMs (VM4, VM5) behind an OpenWrt router. The routers handle site-to-site WireGuard VPN, WiFi, and firewall. VMs provide application services.
+Stockholm runs 3 VMs (VM2, VM3, VM6) behind an OpenWrt router. London runs 1 VM (VM5) behind an OpenWrt router. The routers handle site-to-site WireGuard VPN, WiFi, and firewall. VMs provide application services.
 
 ## Network Topology
 
@@ -105,7 +105,6 @@ vagrant provision vm2-srv    # Re-run the provisioner on one VM
 
 | VM  | Hostname   | Subnet | IP       | Key Services                            |
 | --- | ---------- | ------ | -------- | --------------------------------------- |
-| VM4 | vm4-gw     | LAN    | 10.0.2.1 | OpenVPN, Suricata IDS, Fail2ban, NAT    |
 | VM5 | vm5-radius | LAN    | 10.0.2.2 | FreeRADIUS (proxy to VM3 via WireGuard) |
 
 ## SSH Access
@@ -117,7 +116,6 @@ vagrant ssh vm3-ca
 vagrant ssh vm6-dmz
 
 # London
-vagrant ssh vm4-gw
 vagrant ssh vm5-radius
 ```
 
@@ -141,8 +139,7 @@ All VMs have a Vagrant NAT adapter (`enp0s3`) for management. VLAN interfaces:
 | VM2 | VLAN 10 (10.0.1.2)   | Bridged (10.0.1.50) |
 | VM3 | VLAN 10 (10.0.1.3)   | —                   |
 | VM6 | VLAN 30 (10.0.1.242) | —                   |
-| VM4 | LAN (10.0.2.1)       | —                   |
-| VM5 | LAN (10.0.2.2)       | —                   |
+| VM5 | LAN (10.0.2.2)       | Bridged (10.0.2.50) |
 
 ## Firewall Policy Summary
 
@@ -159,8 +156,6 @@ All VMs have a Vagrant NAT adapter (`enp0s3`) for management. VLAN interfaces:
 **VM3 (CA):** deny incoming except SSH, RADIUS (1812-1813/udp). Air-gapped (no default route).
 
 **VM6 (DMZ):** deny incoming except SSH, HTTP/S
-
-**VM4 (London Gateway):** default deny incoming/routed, allow outgoing. OpenVPN (UDP 1194) allowed. NAT masquerade for LAN outbound.
 
 **VM5 (RADIUS Proxy):** deny incoming except SSH, RADIUS (1812-1813/udp)
 

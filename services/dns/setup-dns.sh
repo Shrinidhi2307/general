@@ -121,7 +121,6 @@ vm3     IN A   10.0.1.3
 vm6     IN A   10.0.1.242
 
 ; London hosts
-vm4     IN A   10.0.2.1
 vm5     IN A   10.0.2.2
 
 ; Web vhosts (both on VM2)

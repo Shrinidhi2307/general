@@ -4,14 +4,14 @@
 # ACME Multi-Site Network — VirtualBox VMs via Vagrant
 # =============================================================================
 # Creates Stockholm: VM2 (Server), VM3 (CA), VM6 (DMZ)
-#         London:    VM4 (Gateway), VM5 (RADIUS Proxy)
+#         London:    VM5 (RADIUS Proxy)
 #
 # The host PC (10.0.1.24) bridges to VM2 for Stockholm network access.
 #
 # USAGE:
 #   brew install --cask virtualbox vagrant
 #   vagrant up                    # All VMs
-#   vagrant up vm4-gw vm5-radius  # London only
+#   vagrant up vm5-radius          # London only
 #   vagrant ssh vm2-srv
 #
 # NETWORKING:
@@ -69,12 +69,26 @@ Vagrant.configure("2") do |config|
       vb.name = "acme-vm3-ca"
       vb.memory = 2048
       vb.cpus = 1
+      vb.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
     end
-    # VLAN 10 — Server (enp0s8)
+    # VLAN 10 — Server (enp0s8) — internal link to VM2
     ca.vm.network "private_network", ip: "10.0.1.3",
       netmask: "255.255.255.192",
       virtualbox__intnet: "acme-vlan10"
+    # Bridged adapter (enp0s9) — connects to physical LAN / Stockholm router.
+    # RADIUS traffic from the router reaches VM3 directly, no dependency on VM2.
+    ca.vm.network "public_network",
+      ip: "10.0.1.51",
+      netmask: "255.255.255.192"
     ca.vm.provision "shell", path: "provision/vm3-ca.sh"
+    # Route fix: prefer bridged adapter (enp0s9) for router LAN traffic
+    ca.vm.provision "shell", run: "always", inline: <<-SHELL
+      if ip link show enp0s9 >/dev/null 2>&1; then
+        ip route del 10.0.1.0/26 dev enp0s8 2>/dev/null || true
+        ip route replace 10.0.1.0/26 dev enp0s9 src 10.0.1.51 metric 50
+        ip route add 10.0.1.0/26 dev enp0s8 src 10.0.1.3 metric 200 2>/dev/null || true
+      fi
+    SHELL
   end
 
   # ──────────────────────────────────────────────
@@ -106,11 +120,31 @@ Vagrant.configure("2") do |config|
       # VBox NAT defaults to 10.0.2.0/24 (gateway 10.0.2.2), which conflicts
       # with VM5's intnet IP 10.0.2.2. Shift NAT to a different subnet.
       vb.customize ["modifyvm", :id, "--natnet1", "10.0.100.0/24"]
+      vb.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
     end
-    # London VLAN 10 — Server (enp0s8)
+    # London LAN (enp0s8) — internal link (VBox intnet)
     rad.vm.network "private_network", ip: "10.0.2.2",
       netmask: "255.255.255.192",
       virtualbox__intnet: "london-vlan10"
+    # Bridged adapter (enp0s9) — connects to London router's br-lan via LAN port 3.
+    # bridge: is hardcoded to avoid interactive prompt during provision.
+    # Change if your USB Ethernet adapter has a different name
+    # (run: VBoxManage list bridgedifs | grep Name)
+    rad.vm.network "public_network",
+      bridge: "en6: USB 10/100/1000 LAN",
+      ip: "192.168.1.50",
+      netmask: "255.255.255.0"
     rad.vm.provision "shell", path: "provision/vm5-radius.sh"
+    # Route fix: prefer bridged adapter (enp0s9) for router LAN traffic.
+    # 192.168.1.0/24 doesn't conflict with VBox NAT (10.0.100.0/24) or
+    # intnet (10.0.2.0/26), so this is simpler than the old 10.0.2.x setup.
+    rad.vm.provision "shell", run: "always", inline: <<-SHELL
+      if ip link show enp0s9 >/dev/null 2>&1; then
+        # Delete any VBox NAT DHCP-injected routes for the router LAN subnet
+        ip route del 192.168.1.0/24 dev enp0s3 2>/dev/null || true
+        ip route del 192.168.1.1 dev enp0s3 2>/dev/null || true
+        ip route replace 192.168.1.0/24 dev enp0s9 src 192.168.1.50 metric 50
+      fi
+    SHELL
   end
 end

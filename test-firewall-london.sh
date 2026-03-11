@@ -47,7 +47,7 @@ check_ping vm5-radius 8.8.8.8 SUCCESS "VM5 (RADIUS) can reach the Internet"
 
 echo ""
 echo "--- 2. Testing London Internal Connectivity ---"
-check_ping vm5-radius 10.0.2.1 SUCCESS "VM5 (RADIUS) can reach London Gateway"
+check_ping vm5-radius 10.0.2.1 SUCCESS "VM5 (RADIUS) can reach London Router"
 
 echo ""
 echo "=========================================================="
