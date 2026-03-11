@@ -42,8 +42,8 @@ acl "internal" {
 options {
     directory "/var/cache/bind";
 
-    /* Only listen on internal interface and loopback */
-    listen-on { 127.0.0.1; 10.0.1.2; };
+    /* Listen on loopback, intnet, and bridged adapter (router reaches 10.0.1.50) */
+    listen-on { 127.0.0.1; 10.0.1.2; 10.0.1.50; };
     listen-on-v6 { none; };
 
     /* Allow queries only from internal networks */
@@ -85,6 +85,13 @@ zone "1.0.10.in-addr.arpa" {
     allow-query { internal; };
 };
 
+/* User-facing zone (secure.acme.com) */
+zone "acme.com" {
+    type master;
+    file "/etc/bind/zones/db.acme.com";
+    allow-query { internal; };
+};
+
 /* Split-horizon zone for spinoff websites (forkhub.one)
  * Internally resolves spinoff1/spinoff2.forkhub.one to VM6 DMZ (10.0.1.242).
  * External DNS for forkhub.one is unaffected — this only applies to internal clients. */
@@ -121,11 +128,12 @@ vm3     IN A   10.0.1.3
 vm6     IN A   10.0.1.242
 
 ; London hosts
-vm5     IN A   10.0.2.2
+vm5     IN A   10.0.2.3
 
 ; Web vhosts (both on VM2)
 critical    IN A   10.0.1.2
 portal      IN A   10.0.1.2
+secure      IN A   10.0.1.50
 ZONE_EOF
 
 # Reverse zone
@@ -147,6 +155,27 @@ cat > "${ZONE_DIR}/db.10.0.1" << REV_EOF
 3   IN PTR vm3.acme.internal.
 242 IN PTR vm6.acme.internal.
 REV_EOF
+
+# acme.com zone (user-facing services)
+cat > "${ZONE_DIR}/db.acme.com" << ACME_EOF
+\$ORIGIN acme.com.
+\$TTL 300
+
+@ IN SOA ns1.acme.com. admin.acme.com. (
+    ${SERIAL} ; serial (YYYYMMDDNN)
+    3600       ; refresh
+    900        ; retry
+    604800     ; expire
+    300        ; minimum TTL / negative cache TTL
+)
+
+; Name servers
+@       IN NS  ns1.acme.com.
+ns1     IN A   10.0.1.50
+
+; Internal HTTPS portal on VM2
+secure  IN A   10.0.1.50
+ACME_EOF
 
 # Spinoff zone (split-horizon for forkhub.one)
 cat > "${ZONE_DIR}/db.forkhub.one" << SPINOFF_EOF
@@ -184,6 +213,7 @@ echo ">>> Validating named configuration..."
 named-checkconf
 named-checkzone "$ZONE" "${ZONE_DIR}/db.acme.internal"
 named-checkzone "1.0.10.in-addr.arpa" "${ZONE_DIR}/db.10.0.1"
+named-checkzone "acme.com" "${ZONE_DIR}/db.acme.com"
 named-checkzone "forkhub.one" "${ZONE_DIR}/db.forkhub.one"
 
 echo ">>> Restarting bind9..."
@@ -193,8 +223,10 @@ systemctl enable named
 echo ""
 echo ">>> BIND9 + DNSSEC setup complete."
 echo "    Test with:"
-echo "      dig @10.0.1.2 vm2.acme.internal"
-echo "      dig +dnssec @10.0.1.2 acme.internal SOA"
+echo "      dig @10.0.1.50 vm2.acme.internal"
+echo "      dig @10.0.1.50 secure.acme.com"
+echo "      dig @10.0.1.50 spinoff1.forkhub.one"
+echo "      dig +dnssec @10.0.1.50 acme.internal SOA"
 
 DNS_EOF
 
@@ -202,6 +234,7 @@ echo ""
 echo "====================================================="
 echo " DNS setup complete!"
 echo " Run these from the host to verify:"
-echo "   vagrant ssh vm2-srv -c 'dig @10.0.1.2 critical.acme.internal'"
-echo "   vagrant ssh vm2-srv -c 'dig +dnssec @10.0.1.2 acme.internal SOA | grep RRSIG'"
+echo "   vagrant ssh vm2-srv -c 'dig @10.0.1.50 secure.acme.com'"
+echo "   vagrant ssh vm2-srv -c 'dig @10.0.1.50 spinoff1.forkhub.one'"
+echo "   vagrant ssh vm2-srv -c 'dig +dnssec @10.0.1.50 acme.internal SOA | grep RRSIG'"
 echo "====================================================="
