@@ -18,6 +18,7 @@ LOG_SOURCES = [
     {"name": "nginx_access", "path": "/var/log/nginx/access.log"},
     {"name": "nginx_error", "path": "/var/log/nginx/error.log"},
     {"name": "syncthing", "path": "/var/log/syncthing.log"},
+    {"name": "openwrt", "path": "/var/log/openwrt.log"},
 ]
 
 SYSTEM_PROMPT = """\

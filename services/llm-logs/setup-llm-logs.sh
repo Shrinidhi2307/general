@@ -8,9 +8,11 @@ set -euo pipefail
 
 INSTALL_DIR="/opt/llm-logs"
 MODEL="gemma3:4b"
-SRC_DIR="/vagrant/services/llm-logs"
+SRC_DIR="$(pwd)"
 
 echo "=== LLM Log Analyzer Setup ==="
+
+# ── Install NVIDIA container toolkit for GPU passthrough ──
 
 # ── Install NVIDIA container toolkit for GPU passthrough ──
 if ! dpkg -s nvidia-container-toolkit &>/dev/null; then
@@ -27,7 +29,6 @@ if ! dpkg -s nvidia-container-toolkit &>/dev/null; then
     nvidia-ctk runtime configure --runtime=docker
     systemctl restart docker
 fi
-
 # ── Detect docker compose command ──
 if docker compose version &>/dev/null; then
     DC="docker compose"
